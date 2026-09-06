@@ -1,5 +1,5 @@
-using API.Furnistore.Application.Auth;
 using API.Furnistore.API.Extensions;
+using API.Furnistore.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,6 +41,7 @@ namespace API.Furnistore.API.Controllers
             [FromQuery] string userId,
             [FromQuery] string code,
             CancellationToken cancellationToken
-        ) => (await auth.ConfirmEmailAsync(userId, code, cancellationToken)).ToNoContentResult(this);
+        ) =>
+            (await auth.ConfirmEmailAsync(userId, code, cancellationToken)).ToNoContentResult(this);
     }
 }

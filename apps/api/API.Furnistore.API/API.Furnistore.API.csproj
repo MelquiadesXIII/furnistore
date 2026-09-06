@@ -30,7 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="../API.Furnistore.Data/API.Furnistore.Data.csproj" />
     <ProjectReference Include="../API.Furnistore.Shared/API.Furnistore.Shared.csproj" />
-    <ProjectReference Include="..\API.Furnistore.Application\API.Furnistore.Application.csproj" />
+    <ProjectReference Include="../API.Furnistore.Application/API.Furnistore.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

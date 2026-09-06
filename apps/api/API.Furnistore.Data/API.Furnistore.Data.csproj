@@ -23,7 +23,7 @@
   </ItemGroup>
   
   <ItemGroup>
-    <ProjectReference Include="..\API.Furnistore.Shared\API.Furnistore.Shared.csproj" />
+    <ProjectReference Include="../API.Furnistore.Shared/API.Furnistore.Shared.csproj" />
   </ItemGroup>
   
 </Project>

@@ -131,6 +131,11 @@ try
 
     // Email
     builder.Services.Configure<API.Furnistore.API.Configuration.SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+    builder.Services.PostConfigure<API.Furnistore.API.Configuration.SmtpSettings>(smtp =>
+    {
+        smtp.UserName = Environment.GetEnvironmentVariable("SMTP_USERNAME") is { Length: > 0 } user ? user : smtp.UserName;
+        smtp.Password = Environment.GetEnvironmentVariable("SMTP_PASSWORD") is { Length: > 0 } pass ? pass : smtp.Password;
+    });
     builder.Services.AddSingleton<IEmailSender, EmailService>();
 
     //JWT

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -30,6 +30,11 @@
   <ItemGroup>
     <ProjectReference Include="../API.Furnistore.Data/API.Furnistore.Data.csproj" />
     <ProjectReference Include="../API.Furnistore.Shared/API.Furnistore.Shared.csproj" />
+    <ProjectReference Include="..\API.Furnistore.Application\API.Furnistore.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="nlog.config" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

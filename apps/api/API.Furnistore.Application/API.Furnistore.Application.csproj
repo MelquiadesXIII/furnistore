@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\API.Furnistore.Data\API.Furnistore.Data.csproj" />
-    <ProjectReference Include="..\API.Furnistore.Shared\API.Furnistore.Shared.csproj" />
+    <ProjectReference Include="../API.Furnistore.Data/API.Furnistore.Data.csproj" />
+    <ProjectReference Include="../API.Furnistore.Shared/API.Furnistore.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

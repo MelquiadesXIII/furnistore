@@ -1,106 +1,58 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using API.Furnistore.Data;
-using API.Furnistore.Shared;
+using API.Furnistore.API.Extensions;
+using API.Furnistore.Application.Orders;
+using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Furnistore.API.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
-    public class OrdersController : ControllerBase
+    [Route("api/orders")]
+    public sealed class OrdersController(OrderService orders) : ControllerBase
     {
-        private readonly APIFurnistoreContext _context;
-
-        public OrdersController(APIFurnistoreContext context)
-         {
-            _context = context;
-         }
-
         [HttpGet]
-        public async Task<IEnumerable<Order>> Get()
-        {
-            return await _context.Orders.Include(o => o.OrderDetails).ToListAsync();
-        }
+        [ProducesResponseType<PagedResult<OrderResponse>>(StatusCodes.Status200OK)]
+        public async Task<IActionResult> Search(
+            [FromQuery] OrderQuery query,
+            CancellationToken cancellationToken
+        ) => (await orders.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var order = await _context.Orders
-                            .Include(od => od.OrderDetails)
-                            .FirstOrDefaultAsync(o=> o.Id == id);
-
-            if(order == null) return NotFound();
-
-            return Ok(order);
-        }
+        [HttpGet("{id:int}")]
+        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+            (await orders.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
         [HttpPost]
-        public async Task<IActionResult> Post(Order order)
+        [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Create(
+            CreateOrderRequest request,
+            CancellationToken cancellationToken
+        )
         {
+            var result = await orders.CreateAsync(request, User.UserId(), cancellationToken);
 
-            if(order == null) return NotFound();
-
-            if (order.OrderDetails == null)
-            {
-                return BadRequest("Order should have at least one details");
-            }
-
-            await _context.Orders.AddAsync(order);
-            await _context.OrderDetails.AddRangeAsync(order.OrderDetails);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("Post", order.Id, order);
+            return result.IsSuccess
+                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
+                : result.ToActionResult(this);
         }
 
-        //DUDA AQUI DE PORQUE NO SE AGREGA LOS DETALLES A EXISTING ORDER
-        [HttpPut]
-        public async Task<IActionResult> Put(Order order)
-        {
-            if(order == null) return NotFound();
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Update(
+            int id,
+            UpdateOrderRequest request,
+            CancellationToken cancellationToken
+        ) =>
+            (await orders.UpdateAsync(id, request, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
 
-            if(order.Id <= 0) return NotFound();
-
-            var existingOrder = await _context.Orders.Include(o => o.OrderDetails).FirstOrDefaultAsync(o => o.Id == order.Id);
-
-            if(existingOrder == null) return NotFound();
-
-            existingOrder.OrderNumber = order.OrderNumber;
-            existingOrder.OrderDate = order.OrderDate;
-            existingOrder.DeliveryDate = order.DeliveryDate;
-            existingOrder.ClientId = order.ClientId;
-
-            _context.OrderDetails.RemoveRange(existingOrder.OrderDetails);
-            
-            _context.Orders.Update(existingOrder);
-            _context.OrderDetails.AddRange(order.OrderDetails);
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        [HttpDelete]
-        public async Task<IActionResult> Delete(Order order)
-        {
-            if(order == null) return NotFound();
-
-            var existingOrder = await _context.Orders.Include(o => o.OrderDetails).FirstOrDefaultAsync(o => o.Id == order.Id);
-
-            if(existingOrder == null) return NotFound();
-
-            _context.OrderDetails.RemoveRange(existingOrder.OrderDetails);
-            _context.Orders.Remove(existingOrder);
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
+            (await orders.DeleteAsync(id, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
     }
 }

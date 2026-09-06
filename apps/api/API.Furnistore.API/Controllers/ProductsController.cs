@@ -1,89 +1,67 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using API.Furnistore.Data;
-using API.Furnistore.Shared;
+using API.Furnistore.API.Extensions;
+using API.Furnistore.Application.Products;
+using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Furnistore.API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    public class ProductsController : ControllerBase
+    [Route("api/products")]
+    public sealed class ProductsController(ProductService products) : ControllerBase
     {
-        private readonly APIFurnistoreContext _context;
-
-         public ProductsController(APIFurnistoreContext context)
-         {
-            _context = context;
-         }
-
         // El catálogo se muestra antes de iniciar sesión, así que las lecturas son públicas.
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IEnumerable<Product>> Get()
-        {
-            return await _context.Products.ToListAsync();
-        }
+        [ProducesResponseType<PagedResult<ProductResponse>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Search(
+            [FromQuery] ProductQuery query,
+            CancellationToken cancellationToken
+        ) => (await products.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
         [AllowAnonymous]
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetDetails(int id)
-        {
-            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
-
-            if (product == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(product);
-        }
-
-        [AllowAnonymous]
-        [HttpGet("GetByCategory/{productCategoryId}")]
-        public async Task<IEnumerable<Product>> GetByCategory(int productCategoryId)
-        {
-            return await _context.Products
-                        .Where(p => p.ProductCategoryId == productCategoryId)
-                        .ToListAsync();
-        }
+        [HttpGet("{id:int}")]
+        [ProducesResponseType<ProductResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+            (await products.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
         [Authorize]
         [HttpPost]
-        public async Task<IActionResult> Post(Product product)
+        [ProducesResponseType<ProductResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Create(
+            CreateProductRequest request,
+            CancellationToken cancellationToken
+        )
         {
-            
-            await _context.Products.AddAsync(product);
-            await _context.SaveChangesAsync();
+            var result = await products.CreateAsync(request, User.UserId(), cancellationToken);
 
-            return CreatedAtAction("Post", product.Id, product);
-        }
-
-         [Authorize]
-         [HttpPut]
-         public async Task<IActionResult> Put(Product product)
-        {
-            _context.Products.Update(product);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            return result.IsSuccess
+                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
+                : result.ToActionResult(this);
         }
 
         [Authorize]
-        [HttpDelete]
-        public async Task<IActionResult> Delete(Product product)
-        {
-            if (product == null) return NotFound();
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Update(
+            int id,
+            UpdateProductRequest request,
+            CancellationToken cancellationToken
+        ) =>
+            (await products.UpdateAsync(id, request, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
 
-            _context.Products.Remove(product);
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
+        [Authorize]
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
+            (await products.DeleteAsync(id, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
     }
 }

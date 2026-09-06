@@ -1,81 +1,65 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using API.Furnistore.Data;
-using API.Furnistore.Shared;
-using Microsoft.EntityFrameworkCore;
-using System.Runtime.InteropServices;
+using API.Furnistore.API.Extensions;
+using API.Furnistore.Application.ProductCategories;
+using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace API.Furnistore.API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    public class ProductCategoriesController : ControllerBase
+    [Route("api/product-categories")]
+    public sealed class ProductCategoriesController(ProductCategoryService categories)
+        : ControllerBase
     {
-        private readonly APIFurnistoreContext _context;
-
-         public ProductCategoriesController(APIFurnistoreContext context)
-         {
-            _context = context;
-         }
-
         // El catálogo se muestra antes de iniciar sesión, así que las lecturas son públicas.
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IEnumerable<ProductCategory>> Get()
-        {
-            return await _context.ProductCategories.ToListAsync();
-        }
+        [ProducesResponseType<PagedResult<ProductCategoryResponse>>(StatusCodes.Status200OK)]
+        public async Task<IActionResult> Search(
+            [FromQuery] ProductCategoryQuery query,
+            CancellationToken cancellationToken
+        ) => (await categories.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
         [AllowAnonymous]
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetDetails(int id)
-        {
-            var productCategory = await _context.ProductCategories.FirstOrDefaultAsync(p => p.Id == id);
-
-            if (productCategory == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(productCategory);
-        }
+        [HttpGet("{id:int}")]
+        [ProducesResponseType<ProductCategoryResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+            (await categories.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
         [Authorize]
         [HttpPost]
-        public async Task<IActionResult> Post(ProductCategory productCategory)
+        [ProducesResponseType<ProductCategoryResponse>(StatusCodes.Status201Created)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Create(
+            CreateProductCategoryRequest request,
+            CancellationToken cancellationToken
+        )
         {
+            var result = await categories.CreateAsync(request, User.UserId(), cancellationToken);
 
-            await _context.ProductCategories.AddAsync(productCategory);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("Post", productCategory.Id, productCategory);
-        }
-
-         [Authorize]
-         [HttpPut]
-         public async Task<IActionResult> Put(ProductCategory productCategory)
-        {
-            _context.ProductCategories.Update(productCategory);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            return result.IsSuccess
+                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
+                : result.ToActionResult(this);
         }
 
         [Authorize]
-        [HttpDelete]
-        public async Task<IActionResult> Delete(ProductCategory productCategory)
-        {
-            if (productCategory == null) return NotFound();
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Update(
+            int id,
+            UpdateProductCategoryRequest request,
+            CancellationToken cancellationToken
+        ) =>
+            (await categories.UpdateAsync(id, request, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
 
-            _context.ProductCategories.Remove(productCategory);
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
+        [Authorize]
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
+            (await categories.DeleteAsync(id, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
     }
 }

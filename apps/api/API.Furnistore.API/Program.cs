@@ -1,5 +1,7 @@
 using System.Text;
-using API.Furnistore.API.Configuration;
+using API.Furnistore.Application.Auth;
+using API.Furnistore.API.Extensions;
+using API.Furnistore.API.Middleware;
 using API.Furnistore.API.Services;
 using API.Furnistore.Data;
 using dotenv.net;
@@ -21,12 +23,28 @@ try
 
     if (builder.Environment.IsDevelopment())
     {
-        DotEnv.Load(options: new DotEnvOptions(envFilePaths: new[] { "../.env" }));
+        DotEnv.Load(
+            options: new DotEnvOptions(
+                envFilePaths: new[] { "../.env" },
+                overwriteExistingVars: false
+            )
+        );
     }
 
     // Add services to the container.
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     builder.Services.AddControllers();
+    builder.Services.AddProblemDetails(options =>
+        options.CustomizeProblemDetails = context =>
+        {
+            context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+        }
+    );
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor,
+        Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
+    builder.Services.AddApplicationServices();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
@@ -68,8 +86,21 @@ try
         ?? throw new InvalidOperationException("DATABASE_URL not configured");
 
     builder.Services.AddDbContext<APIFurnistoreContext>(options =>
-        options.UseNpgsql(connectionString)
+        options.UseNpgsql(
+            connectionString,
+            npgsql =>
+            {
+                npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                    errorCodesToAdd: null
+                );
+                npgsql.CommandTimeout(20);
+            }
+        )
     );
+
+    builder.Services.AddHostedService<DatabaseWarmupService>();
 
     //Configurar JWT con variables de entorno
     var jwtSecret =
@@ -87,16 +118,19 @@ try
         ?? builder.Configuration["JwtConfig:Audience"]
         ?? throw new InvalidOperationException("JWT_AUDIENCE not configured");
 
-    builder.Services.Configure<JwtConfig>(config =>
-    {
-        config.Secret = jwtSecret;
-        config.Issuer = jwtIssuer;
-        config.Audience = jwtAudience;
-        config.ExpiryTime = TimeSpan.Parse(builder.Configuration["JwtConfig:ExpiryTime"]);
-    });
+    builder.Services.AddSingleton(
+        new JwtOptions
+        {
+            Secret = jwtSecret,
+            Issuer = jwtIssuer,
+            Audience = jwtAudience,
+            ExpiryTime = TimeSpan.Parse(builder.Configuration["JwtConfig:ExpiryTime"] ?? "01:00:00"),
+        }
+    );
+
 
     // Email
-    builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+    builder.Services.Configure<API.Furnistore.API.Configuration.SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
     builder.Services.AddSingleton<IEmailSender, EmailService>();
 
     //JWT
@@ -161,11 +195,18 @@ try
         app.UseSwaggerUI();
     }
 
-    app.UseHttpsRedirection();
+    app.UseMiddleware<RequestLoggingMiddleware>();
+    app.UseExceptionHandler();
+
+    if (!app.Environment.IsDevelopment())
+        app.UseHttpsRedirection();
+
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+
+    app.LogRegisteredEndpoints();
 
     app.Run();
 }

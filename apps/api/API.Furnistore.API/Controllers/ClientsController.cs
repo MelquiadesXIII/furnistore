@@ -1,75 +1,58 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using API.Furnistore.Data;
-using API.Furnistore.Shared;
+using API.Furnistore.API.Extensions;
+using API.Furnistore.Application.Clients;
+using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Furnistore.API.Controllers
-{   
+{
     [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
-    public class ClientsController : ControllerBase
+    [Route("api/clients")]
+    public sealed class ClientsController(ClientService clients) : ControllerBase
     {
-         private readonly APIFurnistoreContext _context;
-
-         public ClientsController(APIFurnistoreContext context)
-         {
-            _context = context;
-         }
-
         [HttpGet]
-        public async Task<IEnumerable<Client>> Get()
-        {
-            return await _context.Clients.ToListAsync();
-        }
+        [ProducesResponseType<PagedResult<ClientResponse>>(StatusCodes.Status200OK)]
+        public async Task<IActionResult> Search(
+            [FromQuery] ClientQuery query,
+            CancellationToken cancellationToken
+        ) => (await clients.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetDetails(int id)
-        {
-            var client = await _context.Clients.FirstOrDefaultAsync(c => c.ID == id);
-
-            if (client == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(client);
-        }
+        [HttpGet("{id:int}")]
+        [ProducesResponseType<ClientResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+            (await clients.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
         [HttpPost]
-        public async Task<IActionResult> Post(Client client)
+        [ProducesResponseType<ClientResponse>(StatusCodes.Status201Created)]
+        public async Task<IActionResult> Create(
+            CreateClientRequest request,
+            CancellationToken cancellationToken
+        )
         {
-            
-            await _context.Clients.AddAsync(client);
-            await _context.SaveChangesAsync();
+            var result = await clients.CreateAsync(request, User.UserId(), cancellationToken);
 
-            return CreatedAtAction("Post", client.ID, client);
+            return result.IsSuccess
+                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
+                : result.ToActionResult(this);
         }
 
-         [HttpPut]
-         public async Task<IActionResult> Put(Client client)
-        {
-            _context.Clients.Update(client);
-            await _context.SaveChangesAsync();
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Update(
+            int id,
+            UpdateClientRequest request,
+            CancellationToken cancellationToken
+        ) =>
+            (await clients.UpdateAsync(id, request, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
 
-            return NoContent();
-        }
-
-        [HttpDelete]
-        public async Task<IActionResult> Delete(Client client)
-        {
-            if (client == null) return NotFound();
-
-            _context.Clients.Remove(client);
-
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
+            (await clients.DeleteAsync(id, User.UserId(), cancellationToken))
+                .ToNoContentResult(this);
     }
 }

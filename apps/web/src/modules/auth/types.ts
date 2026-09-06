@@ -1,5 +1,8 @@
-export type AuthResult = {
-  token: string | null;
-  result: boolean;
-  errors: string[] | null;
+export type AuthTokens = {
+  token: string;
+  refreshToken: string;
+};
+
+export type RegisterResult = {
+  emailSent: boolean;
 };

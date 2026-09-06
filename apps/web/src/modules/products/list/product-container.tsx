@@ -20,26 +20,20 @@ export async function ProductContainer({
   page,
 }: { query?: string; page?: string } = {}) {
   const isAuthenticated = Boolean(await getSession());
-  const result = await getProducts();
-
-  const products = result.ok ? result.value : [];
 
   const trimmedQuery = query?.trim() ?? "";
-  const visibleProducts = trimmedQuery
-    ? products.filter((product) =>
-        product.name.toLowerCase().includes(trimmedQuery.toLowerCase()),
-      )
-    : products;
-
-  const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
   const requestedPage = Number.parseInt(page ?? "1", 10);
-  const currentPage = Number.isFinite(requestedPage)
-    ? Math.min(Math.max(1, requestedPage), totalPages)
-    : 1;
-  const pageProducts = visibleProducts.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  );
+  const currentPage = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+
+  const result = await getProducts({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    search: trimmedQuery || undefined,
+  });
+
+  const products = result.ok ? result.value.items : [];
+  const total = result.ok ? result.value.total : 0;
+  const totalPages = result.ok ? Math.max(1, result.value.totalPages) : 1;
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -47,14 +41,14 @@ export async function ProductContainer({
         <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Catálogo</h1>
         <p className="mt-1 text-sm text-ink-muted">
           {result.ok
-            ? `${visibleProducts.length} ${visibleProducts.length === 1 ? "pieza disponible" : "piezas disponibles"}`
+            ? `${total} ${total === 1 ? "pieza disponible" : "piezas disponibles"}`
             : "No se pudo cargar el catálogo."}
         </p>
       </div>
 
       {!result.ok ? (
         <Panel>{toUserMessage(result.error)}</Panel>
-      ) : visibleProducts.length === 0 ? (
+      ) : products.length === 0 ? (
         <Panel>
           {trimmedQuery
             ? `Sin resultados para "${trimmedQuery}".`
@@ -62,10 +56,10 @@ export async function ProductContainer({
         </Panel>
       ) : (
         <>
-          <ProductGrill products={pageProducts} isAuthenticated={isAuthenticated} />
+          <ProductGrill products={products} isAuthenticated={isAuthenticated} />
           {totalPages > 1 && (
             <ProductPagination
-              currentPage={currentPage}
+              currentPage={Math.min(currentPage, totalPages)}
               totalPages={totalPages}
               query={trimmedQuery}
             />

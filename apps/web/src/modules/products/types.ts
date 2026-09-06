@@ -4,3 +4,11 @@ export type Product = {
   price: number;
   productCategoryId: number;
 };
+
+export type Paged<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};

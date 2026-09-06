@@ -16,10 +16,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!result.value.token) {
-    return NextResponse.json({ errors: ["No se pudo iniciar sesión."] }, { status: 502 });
-  }
-
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, result.value.token, sessionCookieOptions);
   return response;

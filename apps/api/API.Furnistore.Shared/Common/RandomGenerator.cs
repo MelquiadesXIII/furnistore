@@ -1,21 +1,23 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace API.Furnistore.Shared.Common
 {
     public static class RandomGenerator
     {
+        private const string Alphabet =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
         public static string GenerateRandomString(int size)
         {
-            var random = new Random();
+            if (size <= 0)
+                throw new ArgumentOutOfRangeException(nameof(size));
 
-            var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$#-_.";
+            var chars = new char[size];
 
-            return new string(
-                Enumerable.Repeat(chars, size).Select(s => s[random.Next(s.Length)]).ToArray()
-            );
+            for (var i = 0; i < size; i++)
+                chars[i] = Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)];
+
+            return new string(chars);
         }
     }
 }

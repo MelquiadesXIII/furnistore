@@ -84,7 +84,7 @@ Verificado: renovar funciona; reutilizar el mismo refresh token devuelve `401` (
 | `POST` (todos) | `CreatedAtAction` mal armado, `Location` apuntaba a la colección | ✅ **Resuelto.** `Location: /api/products/17` |
 | `GET /api/Products/GetByCategory/{id}` | Verbo en la ruta, segmento en PascalCase | ✅ **Resuelto de otra forma.** El endpoint se eliminó; ahora es `GET /api/products?categoryId={id}`, que además compone con el resto de filtros |
 | `GET /api/Test` | Endpoint público que refleja input | ✅ **Eliminado** |
-| `GET /api/Authentication/ConfirmEmail` | Devolvía un string plano | ⚠️ **Parcial.** Ahora devuelve `204` o `ProblemDetails`, consumible por una SPA. Sigue sin redirigir al frontend con el resultado |
+| `GET /api/Authentication/ConfirmEmail` | Devolvía un string plano | ⚠️ **Parcial.** La confirmación mantiene la retroalimentación visible en el navegador: devuelve `200 OK` con texto plano cuando tiene éxito y `ProblemDetails` cuando falla. Sigue pendiente redirigir al frontend para mostrar una página HTML profesional con estados, contador y redirección automática; ver [`API_llama_al_frontend.md`](./API_llama_al_frontend.md) |
 | `GET /api/orders` | No filtra por dueño: cualquier autenticado lista las órdenes de todos | ❌ **Pendiente.** Requiere §1.3. Acepta `?clientId=` como filtro opcional, pero no lo impone |
 | `GET /api/orders/{id}` | Sin verificación de propiedad (IDOR) | ❌ **Pendiente.** Requiere §1.3 |
 | `POST /api/orders` | Confía en el `ClientId` del cuerpo; no calcula ni valida precios | ⚠️ **Parcial.** Ahora valida que el cliente y todos los productos existan, que haya al menos una línea, que no se repita `productId` y que `quantity >= 1`. Sigue confiando en el `ClientId` que manda el cliente, y sigue sin calcular precios |

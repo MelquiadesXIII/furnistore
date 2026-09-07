@@ -35,13 +35,13 @@ namespace API.Furnistore.API.Controllers
         ) => (await auth.RefreshAsync(request, cancellationToken)).ToActionResult(this);
 
         [HttpGet("confirm-email", Name = "ConfirmEmail")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<string>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> ConfirmEmail(
             [FromQuery] string userId,
             [FromQuery] string code,
             CancellationToken cancellationToken
         ) =>
-            (await auth.ConfirmEmailAsync(userId, code, cancellationToken)).ToNoContentResult(this);
+            (await auth.ConfirmEmailAsync(userId, code, cancellationToken)).ToEmailConfirmationResult(this);
     }
 }

@@ -12,6 +12,14 @@ namespace API.Furnistore.API.Extensions
         public static IActionResult ToNoContentResult(this Result result, ControllerBase controller) =>
             result.IsSuccess ? controller.NoContent() : Problem(result.Error!, controller);
 
+        public static IActionResult ToEmailConfirmationResult(
+            this Result result,
+            ControllerBase controller
+        ) =>
+            result.IsSuccess
+                ? controller.Content("Thanks you for confirming your email.", "text/plain")
+                : Problem(result.Error!, controller);
+
         private static IActionResult Problem(Error error, ControllerBase controller) =>
             controller.Problem(
                 title: error.Message,

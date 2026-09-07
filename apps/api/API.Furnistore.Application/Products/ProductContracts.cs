@@ -56,5 +56,5 @@ namespace API.Furnistore.Application.Products
         public int ProductCategoryId { get; init; }
     }
 
-    public sealed record ProductResponse(int Id, string Name, decimal Price, int ProductCategoryId);
+    public sealed record ProductResponse(int Id, string Name, decimal Price, int ProductCategoryId, string? ImageUrl);
 }

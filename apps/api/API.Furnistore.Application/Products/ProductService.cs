@@ -38,7 +38,7 @@ namespace API.Furnistore.Application.Products
                 .ThenBy(p => p.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId))
+                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId, p.ImageUrl))
                 .ToListAsync(cancellationToken);
 
             return Result.Ok(
@@ -54,7 +54,7 @@ namespace API.Furnistore.Application.Products
             var product = await db
                 .Products.AsNoTracking()
                 .Where(p => p.Id == id)
-                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId))
+                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId, p.ImageUrl))
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (product is null)
@@ -104,7 +104,8 @@ namespace API.Furnistore.Application.Products
                     product.Id,
                     product.Name,
                     product.Price,
-                    product.ProductCategoryId
+                    product.ProductCategoryId,
+                    product.ImageUrl
                 )
             );
         }

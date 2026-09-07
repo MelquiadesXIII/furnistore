@@ -15,6 +15,8 @@ namespace API.Furnistore.Shared
 
         public int ProductCategoryId { get; set; }
 
+        public string? ImageUrl { get; set; }
+
         public List<OrderDetail> OrderDetails { get; set; }
     }
 }

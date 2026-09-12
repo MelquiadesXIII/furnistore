@@ -51,7 +51,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Clients", (string)null);
+                    b.ToTable("Clients");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.Order", b =>
@@ -76,7 +76,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.OrderDetail", b =>
@@ -94,7 +94,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderDetails", (string)null);
+                    b.ToTable("OrderDetails");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.Product", b =>
@@ -104,6 +104,9 @@ namespace API.Furnistore.Data.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -117,7 +120,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.ProductCategory", b =>
@@ -134,7 +137,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ProductCategories", (string)null);
+                    b.ToTable("ProductCategories");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.RefreshToken", b =>
@@ -171,7 +174,7 @@ namespace API.Furnistore.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

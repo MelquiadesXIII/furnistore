@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { FURNITURE_MARKS } from "@/components/furniture-marks";
-import { PRODUCT_IMAGES } from "@/modules/products/list/product-images";
 import type { Product } from "@/modules/products/types";
 
 function formatPrice(value: number) {
@@ -18,7 +17,7 @@ export function ProductCard({
   isAuthenticated: boolean;
 }) {
   const Mark = FURNITURE_MARKS[product.id % FURNITURE_MARKS.length];
-  const image = PRODUCT_IMAGES[product.id];
+  const image = product.imageUrl;
 
   return (
     <li>

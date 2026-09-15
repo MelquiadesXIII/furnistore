@@ -3,6 +3,7 @@ export type Product = {
   name: string;
   price: number;
   productCategoryId: number;
+  imageUrl: string | null;
 };
 
 export type Paged<T> = {

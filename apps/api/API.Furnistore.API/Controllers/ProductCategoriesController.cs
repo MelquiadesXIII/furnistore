@@ -27,7 +27,7 @@ namespace API.Furnistore.API.Controllers
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await categories.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         [ProducesResponseType<ProductCategoryResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
@@ -43,7 +43,7 @@ namespace API.Furnistore.API.Controllers
                 : result.ToActionResult(this);
         }
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Update(
@@ -54,7 +54,7 @@ namespace API.Furnistore.API.Controllers
             (await categories.UpdateAsync(id, request, User.UserId(), cancellationToken))
                 .ToNoContentResult(this);
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]

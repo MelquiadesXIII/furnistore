@@ -25,7 +25,7 @@ try
     {
         DotEnv.Load(
             options: new DotEnvOptions(
-                envFilePaths: new[] { "../.env" },
+                envFilePaths: new[] { ".env" },
                 overwriteExistingVars: false
             )
         );
@@ -43,7 +43,7 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor,
-        Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
+    Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
     builder.Services.AddApplicationServices();
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
@@ -170,6 +170,7 @@ try
             jwt.TokenValidationParameters = tokenValidationParameters;
         });
 
+
     builder
         .Services.AddDefaultIdentity<IdentityUser>(options =>
         {
@@ -180,14 +181,28 @@ try
             options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
         })
+        // La Linea de abajo es para el tema de los roles en la pagina web.
+        .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<APIFurnistoreContext>();
 
     // NLog
     builder.Logging.ClearProviders();
     builder.Host.UseNLog();
-    
+
     var app = builder.Build();
 
+    // Esto es para la asignacion del rol.
+    using (var scope = app.Services.CreateScope())
+    {
+        var roleManager = scope.ServiceProvider
+            .GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync("Admin"))
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+
+        if (!await roleManager.RoleExistsAsync("User"))
+            await roleManager.CreateAsync(new IdentityRole("User"));
+    }
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {

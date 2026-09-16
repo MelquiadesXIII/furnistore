@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Karla, IBM_Plex_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -43,7 +44,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col bg-surface font-body text-ink antialiased">
-        <main className="flex flex-1 flex-col">{children}</main>
+        <NuqsAdapter>
+          <main className="flex flex-1 flex-col">{children}</main>
+        </NuqsAdapter>
       </body>
     </html>
   );

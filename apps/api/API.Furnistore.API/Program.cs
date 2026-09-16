@@ -21,11 +21,15 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+
     if (builder.Environment.IsDevelopment())
     {
+        // le puse estas 3 rutas porque con la ruta que necesitaba estaba dando bateo
+                // y entonces volvi a poner como lo encontre y decidi poner ambas para evitar
+                // que se rompa en alguna PC
         DotEnv.Load(
             options: new DotEnvOptions(
-                envFilePaths: new[] { ".env" },
+                envFilePaths: new[] { ".env", "../.env", "../../.env" },
                 overwriteExistingVars: false
             )
         );
@@ -99,7 +103,6 @@ try
             }
         )
     );
-
     builder.Services.AddHostedService<DatabaseWarmupService>();
 
     //Configurar JWT con variables de entorno

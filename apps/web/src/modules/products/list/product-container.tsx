@@ -1,19 +1,11 @@
-import type { ReactNode } from "react";
 import { toUserMessage } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { getProducts } from "@/modules/products/api";
 import { ProductGrill } from "@/modules/products/list/product-grill";
 import { ProductPagination } from "@/modules/products/list/product-pagination";
+import { Panel } from "@/modules/products/panel";
 
 const PAGE_SIZE = 12;
-
-function Panel({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-3 border border-dashed border-hairline py-20 text-center">
-      <p className="text-ink-muted">{children}</p>
-    </div>
-  );
-}
 
 export async function ProductContainer({
   query,

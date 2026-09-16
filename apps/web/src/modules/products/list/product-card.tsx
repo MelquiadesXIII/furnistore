@@ -1,13 +1,12 @@
+import { ArrowUpRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { FURNITURE_MARKS } from "@/components/furniture-marks";
+import { ComprarButton } from "@/modules/products/comprar-button";
+import { formatPrice } from "@/modules/products/format-price";
+import { buildProductHref } from "@/modules/products/slug";
 import type { Product } from "@/modules/products/types";
-
-function formatPrice(value: number) {
-  return `$${value.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 export function ProductCard({
   product,
@@ -18,11 +17,16 @@ export function ProductCard({
 }) {
   const Mark = FURNITURE_MARKS[product.id % FURNITURE_MARKS.length];
   const image = product.imageUrl;
+  const href = buildProductHref(product);
 
   return (
     <li>
       <Card className="gap-0 overflow-hidden rounded-sm py-0 transition-colors hover:border-accent">
-        <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-surface">
+        <Link
+          href={href}
+          aria-label={`Ver detalles de ${product.name}`}
+          className="group relative flex aspect-[4/5] items-center justify-center overflow-hidden bg-surface"
+        >
           {image ? (
             <Image
               src={image}
@@ -34,23 +38,23 @@ export function ProductCard({
           ) : (
             <Mark className="h-full w-full p-8 text-ink-muted transition-colors" />
           )}
-        </div>
+          <span
+            aria-hidden="true"
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-raised/90 text-ink shadow-sm backdrop-blur transition-colors group-hover:bg-accent group-hover:text-accent-ink"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </span>
+        </Link>
         <CardContent className="flex flex-col gap-3 border-t border-hairline px-4 py-3">
           <div className="flex flex-col gap-1">
-            <CardTitle className="font-display text-base font-medium text-ink">
-              {product.name}
-            </CardTitle>
+            <Link href={href}>
+              <CardTitle className="font-display text-base font-medium text-ink transition-colors hover:text-accent">
+                {product.name}
+              </CardTitle>
+            </Link>
             <span className="font-mono text-sm text-ink-muted">{formatPrice(product.price)}</span>
           </div>
-          {isAuthenticated ? (
-            <Button disabled title="Disponible próximamente" className="w-full">
-              Comprar
-            </Button>
-          ) : (
-            <Button asChild className="w-full">
-              <Link href="/login">Comprar</Link>
-            </Button>
-          )}
+          <ComprarButton isAuthenticated={isAuthenticated} />
         </CardContent>
       </Card>
     </li>

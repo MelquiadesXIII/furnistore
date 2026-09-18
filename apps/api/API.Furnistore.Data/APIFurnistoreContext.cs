@@ -21,6 +21,8 @@ namespace API.Furnistore.Data
 
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        public DbSet<CartItem> CartItems { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -35,6 +37,21 @@ namespace API.Furnistore.Data
 
             modelBuilder.Entity<Client>()
                 .HasIndex(client => client.UserId)
+                .IsUnique();
+
+            modelBuilder.Entity<CartItem>()
+                .HasIndex(item => new { item.ClientId, item.ProductId })
+                .IsUnique();
+
+            // El numero de orden lo asigna la base de datos (secuencia), nunca el cliente.
+            modelBuilder.HasSequence<int>("order_number_seq").StartsAt(1000);
+
+            modelBuilder.Entity<Order>()
+                .Property(order => order.OrderNumber)
+                .HasDefaultValueSql("nextval('order_number_seq')");
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(order => order.OrderNumber)
                 .IsUnique();
         }
     }

@@ -1,5 +1,6 @@
 using API.Furnistore.API.Services;
 using API.Furnistore.Application.Auth;
+using API.Furnistore.Application.Carts;
 using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Orders;
 using API.Furnistore.Application.ProductCategories;
@@ -15,6 +16,7 @@ namespace API.Furnistore.API.Extensions
             services.AddScoped<ProductCategoryService>();
             services.AddScoped<ClientService>();
             services.AddScoped<OrderService>();
+            services.AddScoped<CartService>();
             services.AddScoped<AuthService>();
 
             services.AddScoped<IVerificationEmailSender, IdentityVerificationEmailSender>();

@@ -21,6 +21,12 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId ClientDeleted = new(1203, nameof(ClientDeleted));
         public static readonly EventId ClientNotFound = new(1210, nameof(ClientNotFound));
 
+        public static readonly EventId CartItemAdded = new(1301, nameof(CartItemAdded));
+        public static readonly EventId CartItemUpdated = new(1302, nameof(CartItemUpdated));
+        public static readonly EventId CartItemRemoved = new(1303, nameof(CartItemRemoved));
+        public static readonly EventId CartCleared = new(1304, nameof(CartCleared));
+        public static readonly EventId CartRejected = new(1311, nameof(CartRejected));
+
         public static readonly EventId UserRegistered = new(2001, nameof(UserRegistered));
         public static readonly EventId LoginSucceeded = new(2002, nameof(LoginSucceeded));
         public static readonly EventId TokenRefreshed = new(2003, nameof(TokenRefreshed));

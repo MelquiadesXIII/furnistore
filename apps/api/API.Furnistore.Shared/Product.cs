@@ -13,6 +13,8 @@ namespace API.Furnistore.Shared
 
         public decimal Price { get; set; }
 
+        public int Stock { get; set; }
+
         public int ProductCategoryId { get; set; }
 
         public string? ImageUrl { get; set; }

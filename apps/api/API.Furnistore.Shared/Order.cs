@@ -17,6 +17,10 @@ namespace API.Furnistore.Shared
         
         public DateTime DeliveryDate { get; set; }
 
+        public OrderStatus Status { get; set; }
+
+        public decimal Total { get; set; }
+
         public List<OrderDetail> OrderDetails { get; set; }
     }
 }

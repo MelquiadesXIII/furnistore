@@ -45,6 +45,59 @@ namespace API.Furnistore.Application.Clients
             return Result.Ok(new PagedResult<ClientResponse>(items, total, query.Page, query.PageSize));
         }
 
+        public async Task<Result<ClientResponse>> GetMeAsync(
+            string userId,
+            CancellationToken cancellationToken
+        )
+        {
+            var client = await db
+                .Clients.AsNoTracking()
+                .Where(c => c.UserId == userId)
+                .Select(c => new ClientResponse(
+                    c.ID,
+                    c.FirstName,
+                    c.LastName,
+                    c.BirthDate,
+                    c.Phone,
+                    c.Address
+                ))
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (client is null)
+                return Result.Fail<ClientResponse>(SelfNotFound());
+
+            return Result.Ok(client);
+        }
+
+        public async Task<Result> UpdateMeAsync(
+            string userId,
+            UpdateClientRequest request,
+            CancellationToken cancellationToken
+        )
+        {
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+
+            if (client is null)
+                return Result.Fail(SelfNotFound());
+
+            client.FirstName = request.FirstName.Trim();
+            client.LastName = request.LastName.Trim();
+            client.BirthDate = DateTime.SpecifyKind(request.BirthDate, DateTimeKind.Utc);
+            client.Phone = request.Phone.Trim();
+            client.Address = request.Address.Trim();
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation(
+                ApiEvents.ClientUpdated,
+                "Client {ClientId} self-updated by {UserId}",
+                client.ID,
+                userId
+            );
+
+            return Result.Ok();
+        }
+
         public async Task<Result<ClientResponse>> GetByIdAsync(
             int id,
             CancellationToken cancellationToken
@@ -174,6 +227,15 @@ namespace API.Furnistore.Application.Clients
         {
             logger.LogWarning(ApiEvents.ClientNotFound, "Client {ClientId} not found", id);
             return Error.NotFound("client.not_found", $"No existe el cliente {id}.");
+        }
+
+        private Error SelfNotFound()
+        {
+            logger.LogWarning(ApiEvents.ClientNotFound, "No client is linked to the authenticated user");
+            return Error.NotFound(
+                "client.self_not_found",
+                "No se encontró un cliente asociado a esta cuenta."
+            );
         }
     }
 }

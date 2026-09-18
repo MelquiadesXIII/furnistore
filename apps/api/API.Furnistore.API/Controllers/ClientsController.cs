@@ -6,25 +6,43 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Furnistore.API.Controllers
 {
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     [ApiController]
     [Route("api/clients")]
     public sealed class ClientsController(ClientService clients) : ControllerBase
     {
         [HttpGet]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType<PagedResult<ClientResponse>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> Search(
             [FromQuery] ClientQuery query,
             CancellationToken cancellationToken
         ) => (await clients.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
+        [HttpGet("me")]
+        [ProducesResponseType<ClientResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetMe(CancellationToken cancellationToken) =>
+            (await clients.GetMeAsync(User.UserId(), cancellationToken)).ToActionResult(this);
+
+        [HttpPut("me")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> UpdateMe(
+            UpdateClientRequest request,
+            CancellationToken cancellationToken
+        ) =>
+            (await clients.UpdateMeAsync(User.UserId(), request, cancellationToken))
+                .ToNoContentResult(this);
+
         [HttpGet("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType<ClientResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await clients.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType<ClientResponse>(StatusCodes.Status201Created)]
         public async Task<IActionResult> Create(
             CreateClientRequest request,
@@ -39,6 +57,7 @@ namespace API.Furnistore.API.Controllers
         }
 
         [HttpPut("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Update(
             int id,
@@ -49,6 +68,7 @@ namespace API.Furnistore.API.Controllers
                 .ToNoContentResult(this);
 
         [HttpDelete("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>

@@ -25,6 +25,7 @@ namespace API.Furnistore.API.Controllers
             (await orders.GetByIdAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Create(
@@ -40,6 +41,7 @@ namespace API.Furnistore.API.Controllers
         }
 
         [HttpPut("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Update(
             int id,

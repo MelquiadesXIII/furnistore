@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using API.Furnistore.Shared;
 
 namespace API.Furnistore.Application.Orders
 {
@@ -26,9 +27,6 @@ namespace API.Furnistore.Application.Orders
     public sealed record CreateOrderRequest : IValidatableObject
     {
         [Range(1, int.MaxValue)]
-        public int OrderNumber { get; init; }
-
-        [Range(1, int.MaxValue)]
         public int? ClientId { get; init; }
 
         public DateTime OrderDate { get; init; }
@@ -44,9 +42,6 @@ namespace API.Furnistore.Application.Orders
 
     public sealed record UpdateOrderRequest : IValidatableObject
     {
-        [Range(1, int.MaxValue)]
-        public int OrderNumber { get; init; }
-
         [Range(1, int.MaxValue)]
         public int? ClientId { get; init; }
 
@@ -83,7 +78,7 @@ namespace API.Furnistore.Application.Orders
         }
     }
 
-    public sealed record OrderLineResponse(int ProductId, int Quantity);
+    public sealed record OrderLineResponse(int ProductId, int Quantity, decimal UnitPrice);
 
     public sealed record OrderResponse(
         int Id,
@@ -91,6 +86,8 @@ namespace API.Furnistore.Application.Orders
         int ClientId,
         DateTime OrderDate,
         DateTime DeliveryDate,
+        OrderStatus Status,
+        decimal Total,
         IReadOnlyList<OrderLineResponse> Lines
     );
 }

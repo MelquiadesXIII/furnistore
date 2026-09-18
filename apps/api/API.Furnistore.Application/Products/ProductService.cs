@@ -38,7 +38,7 @@ namespace API.Furnistore.Application.Products
                 .ThenBy(p => p.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId, p.ImageUrl))
+                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.Stock, p.ProductCategoryId, p.ImageUrl))
                 .ToListAsync(cancellationToken);
 
             return Result.Ok(
@@ -54,7 +54,7 @@ namespace API.Furnistore.Application.Products
             var product = await db
                 .Products.AsNoTracking()
                 .Where(p => p.Id == id)
-                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.ProductCategoryId, p.ImageUrl))
+                .Select(p => new ProductResponse(p.Id, p.Name, p.Price, p.Stock, p.ProductCategoryId, p.ImageUrl))
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (product is null)
@@ -85,6 +85,7 @@ namespace API.Furnistore.Application.Products
             {
                 Name = request.Name.Trim(),
                 Price = request.Price,
+                Stock = request.Stock,
                 ProductCategoryId = request.ProductCategoryId,
                 ImageUrl = string.IsNullOrWhiteSpace(request.ImageUrl) ? null : request.ImageUrl.Trim(),
             };
@@ -105,6 +106,7 @@ namespace API.Furnistore.Application.Products
                     product.Id,
                     product.Name,
                     product.Price,
+                    product.Stock,
                     product.ProductCategoryId,
                     product.ImageUrl
                 )
@@ -137,6 +139,7 @@ namespace API.Furnistore.Application.Products
 
             product.Name = request.Name.Trim();
             product.Price = request.Price;
+            product.Stock = request.Stock;
             product.ProductCategoryId = request.ProductCategoryId;
             product.ImageUrl = string.IsNullOrWhiteSpace(request.ImageUrl) ? null : request.ImageUrl.Trim();
 

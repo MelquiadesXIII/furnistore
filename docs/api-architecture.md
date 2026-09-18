@@ -277,7 +277,7 @@ Las minúsculas son convención REST y evitan la ambigüedad de mayúsculas entr
 
 **Decisión.** En `Development`, el arranque imprime las 24 rutas agrupadas por controlador, con una columna de acceso.
 
-**Por qué.** Es diagnóstico barato: responde de un vistazo "¿por qué me da 404?" sin abrir Swagger. La columna `publico`/`JWT` añade algo que NestJS no da y que aquí importa: hace visible en cada arranque que las mutaciones del catálogo solo exigen `JWT`, no `Admin` — el agujero documentado en `api-roadmap.md` §1.2.
+La columna publico/JWT sigue añadiendo valor, pero hoy no distingue Admin de User: AccessOf lee IAuthorizeData y no los roles del atributo. El agujero de §1.2 del roadmap ya está cerrado, pero el listado no lo refleja.
 
 Solo en `Development`, para no ensuciar los logs JSON de producción con 24 líneas por arranque.
 

@@ -174,7 +174,7 @@ Requisito transversal: **el precio nunca viaja desde el cliente**, siempre se le
 | `GET /api/admin/orders` | Todas las órdenes con filtros por estado, rango de fechas y cliente. Paginado |
 | `GET /api/admin/clients` | Listado de clientes, paginado. Sustituye al `GET /api/clients` actual |
 
-Prerrequisito de toda esta sección: que exista el rol `Admin` (§1.2).
+El prerrequisito de §1.2 ya está cumplido: el rol Admin existe, el seed está en el arranque y las mutaciones del catálogo lo exigen. Lo que falta es la gestión de usuarios — no hay forma de promover una cuenta a Admin salvo por SQL directo, y no existe un administrador inicial.
 
 ### 3.8 Transversal
 
@@ -189,19 +189,21 @@ Prerrequisito de toda esta sección: que exista el rol `Admin` (§1.2).
 
 ## 4. Cambios de modelo de los que dependen esos endpoints
 
-**Ninguno aplicado todavía.** Sin estos cambios de esquema, buena parte de lo anterior no se puede implementar.
+**Aplicados parcialmente.** `Product.ImageUrl` y `IdentityRole` ya están en el modelo; el resto sigue pendiente.
 
-| Cambio | Por qué |
+| Cambio | Estado |
 |---|---|
-| `Client.UserId` → FK a `AspNetUsers.Id` | Desbloquea `/me`, la propiedad de las órdenes y el checkout completo (§1.3) |
-| `OrderDetail.UnitPrice` | **El más crítico.** Hoy el detalle solo guarda cantidad, así que si cambias el precio de un producto, el valor histórico de todas las órdenes pasadas cambia solo. Es corrupción silenciosa de datos contables |
-| `Order.Status` | No hay ciclo de vida de la orden. Sin esto no se pueden sustituir el `PUT`/`DELETE` del §2 |
-| `Order.Total`, `Order.Currency` | El total debe quedar congelado en la orden, no recalcularse desde precios vivos |
-| Snapshot de dirección de envío en `Order` | La dirección del cliente puede cambiar después de la compra; el envío ya realizado no |
-| `Product`: `Description`, `Stock`, `IsActive`, `Sku`, `Slug`, `ImageUrl`, `CreatedAt` | El modelo actual solo tiene `Id`, `Name`, `Price`, `ProductCategoryId` |
-| Entidades nuevas: `Cart`, `CartItem`, `Address`, `ProductImage` | No existen |
-| `IdentityRole` | Sin roles no hay separación cliente/administrador (§1.2) |
+| `Client.UserId` → FK a `AspNetUsers.Id` | ❌ Pendiente |
+| `OrderDetail.UnitPrice` | ❌ Pendiente |
+| `Order.Status` | ❌ Pendiente |
+| `Order.Total`, `Order.Currency` | ❌ Pendiente |
+| Snapshot de dirección de envío en `Order` | ❌ Pendiente |
+| `Product.ImageUrl` | ✅ Aplicado. Migración `AddProductImageUrl`, con SQL que puebla las URLs en las filas existentes |
+| `Product.Description`, `Stock`, `IsActive`, `Sku`, `Slug`, `CreatedAt` | ❌ Pendiente |
+| `IdentityRole` + roles `Admin`/`User` | ✅ Aplicado (§1.2) |
+| `Cart`, `CartItem`, `Address`, `ProductImage` | ❌ Pendiente |
 
+> **Nota sobre `ImageUrl`.** Está en el modelo y en `ProductResponse`, pero no en `CreateProductRequest` ni `UpdateProductRequest`: la API la devuelve pero no permite escribirla desde el endpoint. El frontend tampoco la consume — sigue usando el mapa hardcodeado de `product-images.ts`. Conectar ambos lados queda pendiente.
 ---
 
 ## 5. Orden sugerido
@@ -209,10 +211,10 @@ Prerrequisito de toda esta sección: que exista el rol `Admin` (§1.2).
 Revisado tras el refactor. Los cimientos de arquitectura ya están, así que el orden lo marca ahora qué desbloquea qué.
 
 1. **`Client.UserId`** (§1.3). De esta FK cuelgan `/me`, la propiedad de órdenes y todo el checkout. Es el prerrequisito de más cosas que ningún otro punto.
-2. **Rol `Admin`** (§1.2). Cierra el agujero de seguridad del catálogo y desbloquea toda la §3.7. Verificable de un vistazo en el listado de rutas del arranque.
+2. ~~**Rol `Admin`** (§1.2).~~ ✅ **Hecho.** Queda el seed de un admin inicial y los endpoints de administración (§3.7).
 3. **`OrderDetail.UnitPrice` y `Order.Status`** (§4). Antes de que haya órdenes reales en producción cuyo histórico se corrompa.
 4. **Cuenta**: `/me`, `logout`, `resend-confirmation`, recuperación de contraseña (§3.1).
-5. **Campos de `Product`** (`Stock`, `IsActive`, `Description`, `ImageUrl`) y luego el **carrito** (§3.3).
+5. **Campos de `Product`** (`Stock`, `IsActive`, `Description`) — `ImageUrl` ya está — y luego el **carrito** (§3.3).
 6. **Checkout** (§3.4) — recordando la trampa de la estrategia de ejecución.
 7. **Pagos y envíos** (§3.5), **administración** e **imágenes** (§3.6, §3.7).
 
@@ -231,3 +233,4 @@ Lo que no venía del análisis original, sino del propio trabajo de arquitectura
 | **Búsqueda sensible a acentos** | `?search=lampara` no encuentra «Lámpara». Requiere la extensión `unaccent` de Postgres y una migración. No es regresión —el filtro en memoria anterior se comportaba igual— pero es un defecto real en un catálogo en español |
 | **`docs/api.md` quedó obsoleto** | Documenta las rutas viejas (`/api/Products`, `GetByCategory`), el shape de `AuthResult` y el `PUT`/`DELETE` con entidad en el cuerpo. **Nada de eso es cierto ya.** Hay que regenerarlo contra los controladores actuales |
 | **Frontera `Application` porosa** | `UserManager` de Identity entra por vía transitiva desde `Data`, y el proyecto `API` sigue viendo `Data` porque el composition root necesita el tipo del `DbContext`. Lo sostiene la revisión de código, no el compilador |
+| **Listado de endpoints sin distinguir roles** | `AccessOf` solo mira `IAuthorizeData`, así que las rutas con `[Authorize(Roles = "Admin")]` se siguen imprimiendo como `JWT` en el arranque. Cosmético |

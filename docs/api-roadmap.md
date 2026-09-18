@@ -4,7 +4,7 @@ Análisis del estado de `apps/api` frente a lo que necesita una tienda online re
 
 Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y a [`api-architecture.md`](./api-architecture.md), que explica **cómo está construida y por qué**. Este documento apunta a lo que **debería** hacer.
 
-> **Actualizado: 2026-09-06**, tras el refactor de arquitectura (commits `035b2`…`7734a`). Los puntos marcados **✅ Resuelto** se comprobaron ejecutando peticiones reales contra la API. Los marcados *verificado* en el análisis original siguen reproduciéndose salvo que se indique lo contrario.
+> Actualizado: 2026-09-16, tras la incorporación de roles Admin/User y Product.ImageUrl., tras el refactor de arquitectura (commits `035b2`…`7734a`). Los puntos marcados **✅ Resuelto** se comprobaron ejecutando peticiones reales contra la API. Los marcados *verificado* en el análisis original siguen reproduciéndose salvo que se indique lo contrario.
 
 ## Resumen del estado
 
@@ -35,21 +35,16 @@ La filtración de stack traces también se cerró: `GlobalExceptionHandler` devu
 
 **Sigue pendiente de §3.1:** no existe `ResendConfirmation`. Una cuenta cuyo correo nunca llegó sigue sin poder desbloquearse sola — solo que ahora el usuario recibe `{"emailSent": false}` y sabe que algo pasó, en vez de un 500 opaco.
 
-### 1.2 Cualquier cliente registrado puede modificar el catálogo — ❌ Pendiente
+### 1.2 Cualquier cliente registrado puede modificar el catálogo — ✅ Resuelto
 
-Sin cambios. `Program.cs` sigue usando `AddDefaultIdentity<IdentityUser>()` sin `.AddRoles<IdentityRole>()`. `[Authorize]` sigue significando solo "trae un token válido".
+`Program.cs` ahora usa `.AddRoles<IdentityRole>()` y crea los roles `Admin` y `User` al arrancar si no existen. `ProductsController` y `ProductCategoriesController` exigen `[Authorize(Roles = "Admin")]` en `POST`, `PUT` y `DELETE`; las lecturas siguen públicas con `[AllowAnonymous]`.
 
-El listado de rutas que ahora imprime el arranque lo hace visible en cada `pnpm dev`:
+`AuthService.RegisterAsync` asigna el rol `User` a cada cuenta nueva, y `IssueTokensAsync` incluye los roles como claims en el JWT — sin eso, `[Authorize(Roles = ...)]` no tendría de dónde leerlos.
 
-```
-POST   /api/products                              JWT
-DELETE /api/products/{id:int}                     JWT
-```
+Quedan dos flecos:
 
-Dice `JWT`, no `Admin`. **Es el agujero de seguridad más grave que queda en el backend.**
-
-**Qué hace falta:** `AddRoles<IdentityRole>()`, seed del rol `Admin`, `[Authorize(Roles = "Admin")]` en toda mutación de catálogo, y un usuario administrador inicial. Cuando esté, la columna del listado de arranque debería pasar a decir `Admin` — verificación gratis en cada arranque.
-
+- **No hay administrador inicial.** Promover una cuenta a `Admin` hoy requiere SQL directo contra `AspNetUserRoles`. Falta el seed y los endpoints de §3.7.
+- **El listado de arranque no lo refleja.** `EndpointLoggingExtensions.AccessOf` solo mira `IAuthorizeData`, así que las rutas con rol siguen imprimiéndose como `JWT`. El filtro real está aplicado; es cosmético.
 ### 1.3 `Client` no está conectado a `IdentityUser` — ❌ Pendiente
 
 Sin cambios. Registrarse crea un `IdentityUser` y nunca un `Client`. No hay forma de saber qué cliente es el usuario del token.

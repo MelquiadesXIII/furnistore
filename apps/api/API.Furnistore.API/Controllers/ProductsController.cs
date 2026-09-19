@@ -18,7 +18,7 @@ namespace API.Furnistore.API.Controllers
         public async Task<IActionResult> Search(
             [FromQuery] ProductQuery query,
             CancellationToken cancellationToken
-        ) => (await products.SearchAsync(query, cancellationToken)).ToActionResult(this);
+        ) => (await products.SearchAsync(query, User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
 
         [AllowAnonymous]
         [HttpGet("{id:int}")]

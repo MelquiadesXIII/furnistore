@@ -27,6 +27,7 @@ namespace API.Furnistore.API.Controllers
 
         [HttpPut("me")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> UpdateMe(
             UpdateClientRequest request,
             CancellationToken cancellationToken
@@ -40,21 +41,6 @@ namespace API.Furnistore.API.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await clients.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
-
-        [HttpPost]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType<ClientResponse>(StatusCodes.Status201Created)]
-        public async Task<IActionResult> Create(
-            CreateClientRequest request,
-            CancellationToken cancellationToken
-        )
-        {
-            var result = await clients.CreateAsync(request, User.UserId(), cancellationToken);
-
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
-                : result.ToActionResult(this);
-        }
 
         [HttpPut("{id:int}")]
         [Authorize(Roles = "Admin")]

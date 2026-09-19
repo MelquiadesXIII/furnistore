@@ -14,35 +14,36 @@ namespace API.Furnistore.Application.Clients
             CancellationToken cancellationToken
         )
         {
-            var clients = db.Clients.AsNoTracking();
+            var clients = WithEmail();
 
             if (!string.IsNullOrWhiteSpace(query.Search))
             {
                 var pattern = $"%{query.Search.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
-                clients = clients.Where(c =>
-                    EF.Functions.ILike(c.FirstName, pattern, "\\")
-                    || EF.Functions.ILike(c.LastName, pattern, "\\")
+                clients = clients.Where(row =>
+                    EF.Functions.ILike(row.Client.FirstName, pattern, "\\")
+                    || EF.Functions.ILike(row.Client.LastName, pattern, "\\")
+                    || EF.Functions.ILike(row.Email!, pattern, "\\")
                 );
             }
 
             var total = await clients.CountAsync(cancellationToken);
 
-            var items = await clients
-                .OrderBy(c => c.LastName)
-                .ThenBy(c => c.FirstName)
+            var rows = await clients
+                .OrderBy(row => row.Client.LastName)
+                .ThenBy(row => row.Client.FirstName)
+                .ThenBy(row => row.Client.ID)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
-                .Select(c => new ClientResponse(
-                    c.ID,
-                    c.FirstName,
-                    c.LastName,
-                    c.BirthDate,
-                    c.Phone,
-                    c.Address
-                ))
                 .ToListAsync(cancellationToken);
 
-            return Result.Ok(new PagedResult<ClientResponse>(items, total, query.Page, query.PageSize));
+            return Result.Ok(
+                new PagedResult<ClientResponse>(
+                    rows.Select(row => ToResponse(row.Client, row.Email)).ToList(),
+                    total,
+                    query.Page,
+                    query.PageSize
+                )
+            );
         }
 
         public async Task<Result<ClientResponse>> GetMeAsync(
@@ -50,23 +51,14 @@ namespace API.Furnistore.Application.Clients
             CancellationToken cancellationToken
         )
         {
-            var client = await db
-                .Clients.AsNoTracking()
-                .Where(c => c.UserId == userId)
-                .Select(c => new ClientResponse(
-                    c.ID,
-                    c.FirstName,
-                    c.LastName,
-                    c.BirthDate,
-                    c.Phone,
-                    c.Address
-                ))
+            var row = await WithEmail()
+                .Where(row => row.Client.UserId == userId)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (client is null)
+            if (row is null)
                 return Result.Fail<ClientResponse>(SelfNotFound());
 
-            return Result.Ok(client);
+            return Result.Ok(ToResponse(row.Client, row.Email));
         }
 
         public async Task<Result> UpdateMeAsync(
@@ -80,12 +72,7 @@ namespace API.Furnistore.Application.Clients
             if (client is null)
                 return Result.Fail(SelfNotFound());
 
-            client.FirstName = request.FirstName.Trim();
-            client.LastName = request.LastName.Trim();
-            client.BirthDate = DateTime.SpecifyKind(request.BirthDate, DateTimeKind.Utc);
-            client.Phone = request.Phone.Trim();
-            client.Address = request.Address.Trim();
-
+            Apply(client, request);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
@@ -103,60 +90,14 @@ namespace API.Furnistore.Application.Clients
             CancellationToken cancellationToken
         )
         {
-            var client = await db
-                .Clients.AsNoTracking()
-                .Where(c => c.ID == id)
-                .Select(c => new ClientResponse(
-                    c.ID,
-                    c.FirstName,
-                    c.LastName,
-                    c.BirthDate,
-                    c.Phone,
-                    c.Address
-                ))
+            var row = await WithEmail()
+                .Where(row => row.Client.ID == id)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (client is null)
+            if (row is null)
                 return Result.Fail<ClientResponse>(NotFound(id));
 
-            return Result.Ok(client);
-        }
-
-        public async Task<Result<ClientResponse>> CreateAsync(
-            CreateClientRequest request,
-            string userId,
-            CancellationToken cancellationToken
-        )
-        {
-            var client = new Client
-            {
-                FirstName = request.FirstName.Trim(),
-                LastName = request.LastName.Trim(),
-                BirthDate = DateTime.SpecifyKind(request.BirthDate, DateTimeKind.Utc),
-                Phone = request.Phone.Trim(),
-                Address = request.Address.Trim(),
-            };
-
-            db.Clients.Add(client);
-            await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogInformation(
-                ApiEvents.ClientCreated,
-                "Client {ClientId} created by {UserId}",
-                client.ID,
-                userId
-            );
-
-            return Result.Ok(
-                new ClientResponse(
-                    client.ID,
-                    client.FirstName,
-                    client.LastName,
-                    client.BirthDate,
-                    client.Phone,
-                    client.Address
-                )
-            );
+            return Result.Ok(ToResponse(row.Client, row.Email));
         }
 
         public async Task<Result> UpdateAsync(
@@ -171,12 +112,7 @@ namespace API.Furnistore.Application.Clients
             if (client is null)
                 return Result.Fail(NotFound(id));
 
-            client.FirstName = request.FirstName.Trim();
-            client.LastName = request.LastName.Trim();
-            client.BirthDate = DateTime.SpecifyKind(request.BirthDate, DateTimeKind.Utc);
-            client.Phone = request.Phone.Trim();
-            client.Address = request.Address.Trim();
-
+            Apply(client, request);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
@@ -223,6 +159,44 @@ namespace API.Furnistore.Application.Clients
             return Result.Ok();
         }
 
+        private static ShippingAddress? AddressOf(Client client) =>
+            client.Street is null || client.City is null || client.Province is null
+                ? null
+                : new ShippingAddress
+                {
+                    Street = client.Street,
+                    City = client.City,
+                    Province = client.Province,
+                    DeliveryNotes = client.DeliveryNotes,
+                };
+
+        private IQueryable<ClientRow> WithEmail() =>
+            from client in db.Clients.AsNoTracking()
+            join user in db.Users on client.UserId equals user.Id
+            select new ClientRow { Client = client, Email = user.Email };
+
+        private static void Apply(Client client, UpdateClientRequest request)
+        {
+            client.FirstName = request.FirstName.Trim();
+            client.LastName = request.LastName.Trim();
+            client.Phone = request.Phone.Trim();
+            client.Street = request.Address.Street.Trim();
+            client.City = request.Address.City.Trim();
+            client.Province = request.Address.Province.Trim();
+            client.DeliveryNotes = TextInput.NullIfBlank(request.Address.DeliveryNotes);
+        }
+
+        private static ClientResponse ToResponse(Client client, string? email) =>
+            new(
+                client.ID,
+                email ?? string.Empty,
+                client.FirstName,
+                client.LastName,
+                client.Phone,
+                AddressOf(client),
+                client.IsProfileComplete
+            );
+
         private Error NotFound(int id)
         {
             logger.LogWarning(ApiEvents.ClientNotFound, "Client {ClientId} not found", id);
@@ -236,6 +210,13 @@ namespace API.Furnistore.Application.Clients
                 "client.self_not_found",
                 "No se encontró un cliente asociado a esta cuenta."
             );
+        }
+
+        private sealed class ClientRow
+        {
+            public required Client Client { get; init; }
+
+            public string? Email { get; init; }
         }
     }
 }

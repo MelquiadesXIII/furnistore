@@ -2,9 +2,8 @@ namespace API.Furnistore.Shared
 {
     public enum OrderStatus
     {
-        Pending,
         Paid,
-        Fulfilled,
+        Shipped,
         Delivered,
         Cancelled,
     }

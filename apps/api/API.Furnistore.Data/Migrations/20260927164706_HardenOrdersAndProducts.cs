@@ -14,8 +14,6 @@ namespace API.Furnistore.Data.Migrations
                 name: "order_number_seq",
                 startValue: 1000L);
 
-            // 50 de stock por defecto para que el catálogo sembrado (SeedCatalogTestData) no quede
-            // agotado apenas se aplica esta migración; los productos nuevos sí piden Stock explícito.
             migrationBuilder.AddColumn<int>(
                 name: "Stock",
                 table: "Products",

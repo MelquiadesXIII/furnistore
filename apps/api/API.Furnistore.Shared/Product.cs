@@ -1,15 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace API.Furnistore.Shared
 {
     public class Product
     {
         public int Id { get; set; }
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
 
         public decimal Price { get; set; }
 
@@ -17,8 +14,20 @@ namespace API.Furnistore.Shared
 
         public int ProductCategoryId { get; set; }
 
+        public ProductCategory Category { get; set; } = null!;
+
         public string? ImageUrl { get; set; }
 
-        public List<OrderDetail> OrderDetails { get; set; }
+        public int? WidthCm { get; set; }
+
+        public int? DepthCm { get; set; }
+
+        public int? HeightCm { get; set; }
+
+        public string? Material { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
+        public DateTime CreatedAt { get; set; }
     }
 }

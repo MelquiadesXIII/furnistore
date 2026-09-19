@@ -3,6 +3,7 @@ using System;
 using API.Furnistore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace API.Furnistore.Data.Migrations
 {
     [DbContext(typeof(APIFurnistoreContext))]
-    partial class APIFurnistoreContextModelSnapshot : ModelSnapshot
+    [Migration("20261002013109_AddCheckoutSupport")]
+    partial class AddCheckoutSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -49,10 +52,7 @@ namespace API.Furnistore.Data.Migrations
                     b.HasIndex("ClientId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("CartItems", t =>
-                        {
-                            t.HasCheckConstraint("CK_CartItems_Quantity_Positive", "\"Quantity\" > 0");
-                        });
+                    b.ToTable("CartItems");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.Client", b =>
@@ -63,11 +63,12 @@ namespace API.Furnistore.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
 
-                    b.Property<string>("City")
+                    b.Property<string>("Address")
+                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("DeliveryNotes")
-                        .HasColumnType("text");
+                    b.Property<DateTime>("BirthDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
@@ -78,16 +79,10 @@ namespace API.Furnistore.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Phone")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Province")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Street")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("ID");
@@ -106,88 +101,32 @@ namespace API.Furnistore.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("CancelReason")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("ClientId")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("DeliveredAt")
+                    b.Property<DateTime>("DeliveryDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateOnly>("EstimatedDeliveryDate")
-                        .HasColumnType("date");
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("OrderNumber")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValueSql("nextval('order_number_seq')");
 
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("PlacedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ShipToCity")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ShipToDeliveryNotes")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ShipToName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ShipToPhone")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ShipToProvince")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ShipToStreet")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ShippedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("ShippingCost")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<decimal>("Subtotal")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("Total")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                        .HasColumnType("numeric");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
-                    b.HasIndex("ClientId", "PlacedAt");
-
-                    b.ToTable("Orders", t =>
-                        {
-                            t.HasCheckConstraint("CK_Orders_Amounts", "\"Subtotal\" >= 0 AND \"ShippingCost\" >= 0 AND \"Total\" = \"Subtotal\" + \"ShippingCost\"");
-
-                            t.HasCheckConstraint("CK_Orders_Status", "\"Status\" IN ('Paid', 'Shipped', 'Delivered', 'Cancelled')");
-                        });
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.OrderDetail", b =>
@@ -206,19 +145,13 @@ namespace API.Furnistore.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                        .HasColumnType("numeric");
 
                     b.HasKey("OrderId", "ProductId");
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderDetails", t =>
-                        {
-                            t.HasCheckConstraint("CK_OrderDetails_Quantity_Positive", "\"Quantity\" > 0");
-
-                            t.HasCheckConstraint("CK_OrderDetails_UnitPrice_NonNegative", "\"UnitPrice\" >= 0");
-                        });
+                    b.ToTable("OrderDetails");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.Product", b =>
@@ -229,28 +162,7 @@ namespace API.Furnistore.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int?>("DepthCm")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("HeightCm")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ImageUrl")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Material")
                         .HasColumnType("text");
 
                     b.Property<string>("Name")
@@ -258,8 +170,7 @@ namespace API.Furnistore.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("Price")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<int>("ProductCategoryId")
                         .HasColumnType("integer");
@@ -267,21 +178,9 @@ namespace API.Furnistore.Data.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("WidthCm")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductCategoryId");
-
-                    b.ToTable("Products", t =>
-                        {
-                            t.HasCheckConstraint("CK_Products_Dimensions_Positive", "(\"WidthCm\" IS NULL OR \"WidthCm\" > 0) AND (\"DepthCm\" IS NULL OR \"DepthCm\" > 0) AND (\"HeightCm\" IS NULL OR \"HeightCm\" > 0)");
-
-                            t.HasCheckConstraint("CK_Products_Price_Positive", "\"Price\" > 0");
-
-                            t.HasCheckConstraint("CK_Products_Stock_NonNegative", "\"Stock\" >= 0");
-                        });
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.ProductCategory", b =>
@@ -325,21 +224,15 @@ namespace API.Furnistore.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("TokenHash")
+                    b.Property<string>("Token")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("text");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -564,17 +457,7 @@ namespace API.Furnistore.Data.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
                         .WithOne()
                         .HasForeignKey("API.Furnistore.Shared.Client", "UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("API.Furnistore.Shared.Order", b =>
-                {
-                    b.HasOne("API.Furnistore.Shared.Client", null)
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.OrderDetail", b =>
@@ -586,28 +469,8 @@ namespace API.Furnistore.Data.Migrations
                         .IsRequired();
 
                     b.HasOne("API.Furnistore.Shared.Product", null)
-                        .WithMany()
+                        .WithMany("OrderDetails")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("API.Furnistore.Shared.Product", b =>
-                {
-                    b.HasOne("API.Furnistore.Shared.ProductCategory", "Category")
-                        .WithMany()
-                        .HasForeignKey("ProductCategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Category");
-                });
-
-            modelBuilder.Entity("API.Furnistore.Shared.RefreshToken", b =>
-                {
-                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -664,6 +527,11 @@ namespace API.Furnistore.Data.Migrations
                 });
 
             modelBuilder.Entity("API.Furnistore.Shared.Order", b =>
+                {
+                    b.Navigation("OrderDetails");
+                });
+
+            modelBuilder.Entity("API.Furnistore.Shared.Product", b =>
                 {
                     b.Navigation("OrderDetails");
                 });

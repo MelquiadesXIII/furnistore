@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Common;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
@@ -9,6 +11,8 @@ namespace API.Furnistore.Application.Orders
 {
     public sealed class OrderService(APIFurnistoreContext db, ILogger<OrderService> logger)
     {
+        private const int CheckoutLockNamespace = 3004;
+
         public async Task<Result<PagedResult<OrderResponse>>> SearchAsync(
             OrderQuery query,
             string userId,
@@ -30,17 +34,27 @@ namespace API.Furnistore.Application.Orders
             if (query.ClientId is int clientId)
                 orders = orders.Where(o => o.ClientId == clientId);
 
+            if (query.Status is OrderStatus status)
+                orders = orders.Where(o => o.Status == status);
+
             var total = await orders.CountAsync(cancellationToken);
 
             var items = await orders
-                .OrderByDescending(o => o.OrderDate)
-                .ThenBy(o => o.Id)
+                .OrderByDescending(o => o.PlacedAt)
+                .ThenByDescending(o => o.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
                 .ToListAsync(cancellationToken);
 
+            var images = await LoadImagesAsync(items, cancellationToken);
+
             return Result.Ok(
-                new PagedResult<OrderResponse>(items.Select(ToResponse).ToList(), total, query.Page, query.PageSize)
+                new PagedResult<OrderResponse>(
+                    items.Select(order => ToResponse(order, images)).ToList(),
+                    total,
+                    query.Page,
+                    query.PageSize
+                )
             );
         }
 
@@ -51,209 +65,374 @@ namespace API.Furnistore.Application.Orders
             CancellationToken cancellationToken
         )
         {
-            var order = await db
-                .Orders.AsNoTracking()
-                .Include(o => o.OrderDetails)
-                .Where(o => o.Id == id)
-                .Where(o => isAdmin || db.Clients.Any(c => c.ID == o.ClientId && c.UserId == userId))
-                .FirstOrDefaultAsync(cancellationToken);
+            var order = await FindVisibleAsync(id, userId, isAdmin, cancellationToken);
 
             if (order is null)
                 return Result.Fail<OrderResponse>(NotFound(id));
 
-            return Result.Ok(ToResponse(order));
+            var images = await LoadImagesAsync([order], cancellationToken);
+            return Result.Ok(ToResponse(order, images));
         }
 
-        public async Task<Result<OrderResponse>> CreateAsync(
-            CreateOrderRequest request,
+        public async Task<Result<OrderResponse>> CheckoutAsync(
+            CheckoutRequest request,
             string userId,
-            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
-            var clientId = isAdmin
-                ? request.ClientId
-                : await GetClientIdAsync(userId, cancellationToken);
+            var client = await db
+                .Clients.AsNoTracking()
+                .Where(c => c.UserId == userId)
+                .SingleOrDefaultAsync(cancellationToken);
 
-            if (clientId is null)
+            if (client is null)
                 return Result.Fail<OrderResponse>(
-                    Error.Forbidden("order.client_not_owned", "La cuenta no tiene un cliente asociado.")
+                    CheckoutRejected(
+                        Error.NotFound(
+                            "checkout.client_not_found",
+                            "No se encontró un cliente asociado a esta cuenta."
+                        ),
+                        userId
+                    )
                 );
 
-            var validation = await ValidateReferencesAsync(clientId.Value, request.Lines, cancellationToken);
-            if (validation.Error is not null)
-                return Result.Fail<OrderResponse>(validation.Error);
+            if (!client.IsProfileComplete)
+                return Result.Fail<OrderResponse>(
+                    CheckoutRejected(
+                        Error.Validation(
+                            "checkout.profile_incomplete",
+                            "Completa tu teléfono y dirección de envío antes de pagar."
+                        ),
+                        userId
+                    )
+                );
 
-            // EnableRetryOnFailure (Program.cs) instala una execution strategy que reintenta operaciones
-            // transitoriamente fallidas; una transacción abierta a mano fuera de ExecuteAsync no es
-            // compatible con eso (EF Core lanza en tiempo de ejecución), así que toda la transacción
-            // vive dentro del delegado para que un reintento la reabra completa.
             var strategy = db.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-                var stockError = await ReserveStockAsync(request.Lines, cancellationToken);
-                if (stockError is not null)
+                await db.Database.ExecuteSqlAsync(
+                    $"SELECT pg_advisory_xact_lock({CheckoutLockNamespace}, {client.ID})",
+                    cancellationToken
+                );
+
+                var lines = await (
+                    from item in db.CartItems
+                    join product in db.Products on item.ProductId equals product.Id
+                    where item.ClientId == client.ID
+                    orderby product.Id
+                    select new
+                    {
+                        product.Id,
+                        product.Name,
+                        product.Price,
+                        product.Stock,
+                        product.ImageUrl,
+                        product.IsActive,
+                        item.Quantity,
+                    }
+                ).ToListAsync(cancellationToken);
+
+                if (lines.Count == 0)
                 {
                     await transaction.RollbackAsync(cancellationToken);
-                    return Result.Fail<OrderResponse>(stockError);
+                    return Result.Fail<OrderResponse>(
+                        CheckoutRejected(
+                            Error.Validation("checkout.empty_cart", "Tu carrito está vacío."),
+                            userId
+                        )
+                    );
                 }
 
-                var orderDetails = request
-                    .Lines.Select(l => new OrderDetail
-                    {
-                        ProductId = l.ProductId,
-                        Quantity = l.Quantity,
-                        UnitPrice = validation.Prices[l.ProductId],
-                    })
-                    .ToList();
+                var archived = lines.FirstOrDefault(line => !line.IsActive);
+                if (archived is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Result.Fail<OrderResponse>(
+                        CheckoutRejected(
+                            Error.Conflict(
+                                "checkout.product_unavailable",
+                                $"{archived.Name} ya no está disponible. Quítalo de tu carrito para continuar."
+                            ),
+                            userId
+                        )
+                    );
+                }
 
+                var subtotal = lines.Sum(line => line.Price * line.Quantity);
+                var shippingCost = ShippingPolicy.CostFor(subtotal);
+                var total = subtotal + shippingCost;
+
+                if (decimal.Round(total, 2) != decimal.Round(request.ExpectedTotal, 2))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Result.Fail<OrderResponse>(
+                        CheckoutRejected(
+                            Error.Conflict(
+                                "checkout.price_changed",
+                                "Los precios de tu carrito cambiaron. Revisa el nuevo total antes de confirmar."
+                            ),
+                            userId
+                        )
+                    );
+                }
+
+                var shortLine = lines.FirstOrDefault(line => line.Stock < line.Quantity);
+                var failedProductId =
+                    shortLine?.Id
+                    ?? await ReserveStockAsync(
+                        lines.Select(line => (line.Id, line.Quantity)),
+                        cancellationToken
+                    );
+
+                if (failedProductId is int productId)
+                {
+                    var failed = lines.First(line => line.Id == productId);
+                    var available = await CurrentStockAsync(productId, cancellationToken) ?? 0;
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Result.Fail<OrderResponse>(
+                        CheckoutRejected(
+                            Error.Conflict(
+                                "checkout.insufficient_stock",
+                                $"No hay stock suficiente de {failed.Name}: quedan {available}."
+                            ),
+                            userId
+                        )
+                    );
+                }
+
+                var now = DateTime.UtcNow;
                 var order = new Order
                 {
-                    ClientId = clientId.Value,
-                    OrderDate = DateTime.SpecifyKind(request.OrderDate, DateTimeKind.Utc),
-                    DeliveryDate = DateTime.SpecifyKind(request.DeliveryDate, DateTimeKind.Utc),
-                    Status = OrderStatus.Pending,
-                    Total = orderDetails.Sum(d => d.UnitPrice * d.Quantity),
-                    OrderDetails = orderDetails,
+                    ClientId = client.ID,
+                    Status = OrderStatus.Paid,
+                    Subtotal = subtotal,
+                    ShippingCost = shippingCost,
+                    Total = total,
+                    ShipToName = $"{client.FirstName} {client.LastName}",
+                    ShipToPhone = client.Phone!,
+                    ShipToStreet = client.Street!,
+                    ShipToCity = client.City!,
+                    ShipToProvince = client.Province!,
+                    ShipToDeliveryNotes = client.DeliveryNotes,
+                    PlacedAt = now,
+                    PaidAt = now,
+                    EstimatedDeliveryDate = DateOnly.FromDateTime(now).AddDays(ShippingPolicy.DeliveryLeadDays),
+                    OrderDetails = lines
+                        .Select(line => new OrderDetail
+                        {
+                            ProductId = line.Id,
+                            ProductName = line.Name,
+                            Quantity = line.Quantity,
+                            UnitPrice = line.Price,
+                        })
+                        .ToList(),
                 };
 
                 db.Orders.Add(order);
                 await db.SaveChangesAsync(cancellationToken);
+
+                await db.CartItems
+                    .Where(item => item.ClientId == client.ID)
+                    .ExecuteDeleteAsync(cancellationToken);
+
                 await transaction.CommitAsync(cancellationToken);
 
                 logger.LogInformation(
-                    ApiEvents.OrderCreated,
-                    "Order {OrderId} ({OrderNumber}) created for client {ClientId} with {LineCount} lines by {UserId}",
+                    ApiEvents.CheckoutCompleted,
+                    "Checkout created order {OrderId} ({OrderNumber}) for client {ClientId}, total {Total}",
                     order.Id,
                     order.OrderNumber,
                     order.ClientId,
-                    order.OrderDetails.Count,
-                    userId
+                    order.Total
                 );
 
-                return Result.Ok(ToResponse(order));
+                return Result.Ok(ToResponse(order, lines.ToDictionary(line => line.Id, line => (string?)line.ImageUrl)));
             });
         }
 
-        public async Task<Result> UpdateAsync(
+        public async Task<Result<OrderResponse>> CancelAsync(
             int id,
-            UpdateOrderRequest request,
+            CancelOrderRequest request,
             string userId,
             bool isAdmin,
             CancellationToken cancellationToken
         )
         {
-            var order = await db
-                .Orders.Include(o => o.OrderDetails)
-                .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
-
-            if (order is null)
-                return Result.Fail(NotFound(id));
-
-            if (!isAdmin && !await IsOwnedByAsync(order.ClientId, userId, cancellationToken))
-                return Result.Fail(Error.Forbidden("order.not_owned", "No puedes modificar esta orden."));
-
-            var clientId = isAdmin
-                ? request.ClientId
-                : await GetClientIdAsync(userId, cancellationToken);
-            if (clientId is null)
-                return Result.Fail(Error.Forbidden("order.client_not_owned", "La cuenta no tiene un cliente asociado."));
-
-            var validation = await ValidateReferencesAsync(clientId.Value, request.Lines, cancellationToken);
-            if (validation.Error is not null)
-                return Result.Fail(validation.Error);
-
+            var reason = TextInput.NullIfBlank(request.Reason);
             var strategy = db.Database.CreateExecutionStrategy();
 
-            return await strategy.ExecuteAsync(async () =>
+            var cancelled = await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                var now = DateTime.UtcNow;
 
-                // Se devuelve el stock reservado por las líneas viejas antes de aplicar las nuevas,
-                // para no arrastrar el descuento de una línea que ya no existe (o cambió de cantidad).
-                await RestoreStockAsync(order.OrderDetails, cancellationToken);
+                var affected = await Visible(userId, isAdmin)
+                    .Where(o => o.Id == id && o.Status == OrderStatus.Paid)
+                    .ExecuteUpdateAsync(
+                        setters => setters
+                            .SetProperty(o => o.Status, OrderStatus.Cancelled)
+                            .SetProperty(o => o.CancelledAt, now)
+                            .SetProperty(o => o.CancelReason, reason),
+                        cancellationToken
+                    );
 
-                var stockError = await ReserveStockAsync(request.Lines, cancellationToken);
-                if (stockError is not null)
+                if (affected == 1)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
-                    return Result.Fail(stockError);
+                    var lines = await db
+                        .OrderDetails.Where(d => d.OrderId == id)
+                        .OrderBy(d => d.ProductId)
+                        .Select(d => new { d.ProductId, d.Quantity })
+                        .ToListAsync(cancellationToken);
+
+                    foreach (var line in lines)
+                    {
+                        await db
+                            .Products.Where(p => p.Id == line.ProductId)
+                            .ExecuteUpdateAsync(
+                                setters => setters.SetProperty(p => p.Stock, p => p.Stock + line.Quantity),
+                                cancellationToken
+                            );
+                    }
                 }
 
-                order.ClientId = clientId.Value;
-                order.OrderDate = DateTime.SpecifyKind(request.OrderDate, DateTimeKind.Utc);
-                order.DeliveryDate = DateTime.SpecifyKind(request.DeliveryDate, DateTimeKind.Utc);
-
-                db.OrderDetails.RemoveRange(order.OrderDetails);
-                var newDetails = request
-                    .Lines.Select(l => new OrderDetail
-                    {
-                        OrderId = order.Id,
-                        ProductId = l.ProductId,
-                        Quantity = l.Quantity,
-                        UnitPrice = validation.Prices[l.ProductId],
-                    })
-                    .ToList();
-                order.OrderDetails = newDetails;
-                order.Total = newDetails.Sum(d => d.UnitPrice * d.Quantity);
-
-                await db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-
-                logger.LogInformation(
-                    ApiEvents.OrderUpdated,
-                    "Order {OrderId} updated by {UserId}",
-                    id,
-                    userId
-                );
-
-                return Result.Ok();
+                return affected == 1;
             });
+
+            return await TransitionResultAsync(
+                id,
+                userId,
+                isAdmin,
+                cancelled,
+                "cancelar",
+                ApiEvents.OrderCancelled,
+                cancellationToken
+            );
         }
 
-        public async Task<Result> DeleteAsync(
+        public Task<Result<OrderResponse>> ShipAsync(
+            int id,
+            string userId,
+            CancellationToken cancellationToken
+        ) =>
+            AdvanceAsync(
+                id,
+                userId,
+                OrderStatus.Paid,
+                OrderStatus.Shipped,
+                o => o.ShippedAt,
+                "enviar",
+                ApiEvents.OrderShipped,
+                cancellationToken
+            );
+
+        public Task<Result<OrderResponse>> DeliverAsync(
+            int id,
+            string userId,
+            CancellationToken cancellationToken
+        ) =>
+            AdvanceAsync(
+                id,
+                userId,
+                OrderStatus.Shipped,
+                OrderStatus.Delivered,
+                o => o.DeliveredAt,
+                "marcar como entregado",
+                ApiEvents.OrderDelivered,
+                cancellationToken
+            );
+
+        private async Task<Result<OrderResponse>> AdvanceAsync(
+            int id,
+            string userId,
+            OrderStatus from,
+            OrderStatus to,
+            Expression<Func<Order, DateTime?>> stampedAt,
+            string action,
+            EventId eventId,
+            CancellationToken cancellationToken
+        )
+        {
+            var now = DateTime.UtcNow;
+            var affected = await db
+                .Orders.Where(o => o.Id == id && o.Status == from)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(o => o.Status, to).SetProperty(stampedAt, now),
+                    cancellationToken
+                );
+
+            return await TransitionResultAsync(
+                id,
+                userId,
+                isAdmin: true,
+                affected == 1,
+                action,
+                eventId,
+                cancellationToken
+            );
+        }
+
+        private async Task<Result<OrderResponse>> TransitionResultAsync(
+            int id,
+            string userId,
+            bool isAdmin,
+            bool transitioned,
+            string action,
+            EventId eventId,
+            CancellationToken cancellationToken
+        )
+        {
+            var order = await FindVisibleAsync(id, userId, isAdmin, cancellationToken);
+
+            if (order is null)
+                return Result.Fail<OrderResponse>(NotFound(id));
+
+            if (!transitioned)
+            {
+                logger.LogWarning(
+                    ApiEvents.OrderTransitionRejected,
+                    "Order {OrderId} rejected '{Action}' while {Status}, requested by {UserId}",
+                    id,
+                    action,
+                    order.Status,
+                    userId
+                );
+                return Result.Fail<OrderResponse>(
+                    Error.Conflict(
+                        "order.invalid_transition",
+                        $"No se puede {action} un pedido {StatusLabel(order.Status)}."
+                    )
+                );
+            }
+
+            logger.LogInformation(
+                eventId,
+                "Order {OrderId} is now {Status}, by {UserId}",
+                id,
+                order.Status,
+                userId
+            );
+
+            var images = await LoadImagesAsync([order], cancellationToken);
+            return Result.Ok(ToResponse(order, images));
+        }
+
+        private IQueryable<Order> Visible(string userId, bool isAdmin) =>
+            db.Orders.Where(o => isAdmin || db.Clients.Any(c => c.ID == o.ClientId && c.UserId == userId));
+
+        private Task<Order?> FindVisibleAsync(
             int id,
             string userId,
             bool isAdmin,
             CancellationToken cancellationToken
-        )
-        {
-            var order = await db
-                .Orders.Include(o => o.OrderDetails)
+        ) =>
+            Visible(userId, isAdmin)
+                .AsNoTracking()
+                .Include(o => o.OrderDetails)
                 .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
-
-            if (order is null)
-                return Result.Fail(NotFound(id));
-
-            if (!isAdmin && !await IsOwnedByAsync(order.ClientId, userId, cancellationToken))
-                return Result.Fail(Error.Forbidden("order.not_owned", "No puedes eliminar esta orden."));
-
-            var strategy = db.Database.CreateExecutionStrategy();
-
-            return await strategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-
-                await RestoreStockAsync(order.OrderDetails, cancellationToken);
-
-                db.OrderDetails.RemoveRange(order.OrderDetails);
-                db.Orders.Remove(order);
-                await db.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                logger.LogInformation(
-                    ApiEvents.OrderDeleted,
-                    "Order {OrderId} deleted by {UserId}",
-                    id,
-                    userId
-                );
-
-                return Result.Ok();
-            });
-        }
 
         private Task<int?> GetClientIdAsync(string userId, CancellationToken cancellationToken) =>
             db.Clients
@@ -261,96 +440,18 @@ namespace API.Furnistore.Application.Orders
                 .Select(client => (int?)client.ID)
                 .SingleOrDefaultAsync(cancellationToken);
 
-        private Task<bool> IsOwnedByAsync(
-            int clientId,
-            string userId,
-            CancellationToken cancellationToken
-        ) =>
-            db.Clients.AnyAsync(
-                client => client.ID == clientId && client.UserId == userId,
-                cancellationToken
-            );
+        private Task<int?> CurrentStockAsync(int productId, CancellationToken cancellationToken) =>
+            db.Products
+                .Where(p => p.Id == productId)
+                .Select(p => (int?)p.Stock)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        /// <summary>
-        /// Valida cliente/productos y devuelve el precio vigente de cada producto (para snapshotear
-        /// en OrderDetail.UnitPrice) junto con un chequeo temprano de stock. La reserva atómica real
-        /// contra condiciones de carrera ocurre en <see cref="ReserveStockAsync"/>, dentro de la transacción.
-        /// </summary>
-        private async Task<(Error? Error, Dictionary<int, decimal> Prices)> ValidateReferencesAsync(
-            int clientId,
-            IReadOnlyList<OrderLineRequest> lines,
+        private async Task<int?> ReserveStockAsync(
+            IEnumerable<(int ProductId, int Quantity)> lines,
             CancellationToken cancellationToken
         )
         {
-            if (!await db.Clients.AnyAsync(c => c.ID == clientId, cancellationToken))
-            {
-                logger.LogWarning(
-                    ApiEvents.OrderRejected,
-                    "Order rejected: client {ClientId} does not exist",
-                    clientId
-                );
-                return (Error.Validation("order.client_not_found", $"No existe el cliente {clientId}."), []);
-            }
-
-            var productIds = lines.Select(l => l.ProductId).Distinct().ToList();
-            var products = await db
-                .Products.Where(p => productIds.Contains(p.Id))
-                .Select(p => new { p.Id, p.Price, p.Stock })
-                .ToListAsync(cancellationToken);
-
-            var missing = productIds.Except(products.Select(p => p.Id)).ToList();
-            if (missing.Count > 0)
-            {
-                logger.LogWarning(
-                    ApiEvents.OrderRejected,
-                    "Order rejected: products {MissingProductIds} do not exist",
-                    string.Join(",", missing)
-                );
-                return (
-                    Error.Validation(
-                        "order.product_not_found",
-                        $"No existen los productos: {string.Join(", ", missing)}."
-                    ),
-                    []
-                );
-            }
-
-            foreach (var line in lines)
-            {
-                var stock = products.First(p => p.Id == line.ProductId).Stock;
-                if (stock < line.Quantity)
-                {
-                    logger.LogWarning(
-                        ApiEvents.OrderRejected,
-                        "Order rejected: insufficient stock for product {ProductId} ({Stock} < {Requested})",
-                        line.ProductId,
-                        stock,
-                        line.Quantity
-                    );
-                    return (
-                        Error.Conflict(
-                            "order.insufficient_stock",
-                            $"Stock insuficiente para el producto {line.ProductId}: quedan {stock}."
-                        ),
-                        []
-                    );
-                }
-            }
-
-            return (null, products.ToDictionary(p => p.Id, p => p.Price));
-        }
-
-        /// <summary>
-        /// Descuenta stock de forma atómica (UPDATE condicionado, no lectura-luego-escritura) para que
-        /// dos compras concurrentes del mismo producto nunca dejen el stock en negativo. Debe llamarse
-        /// dentro de una transacción para que un fallo a mitad de camino revierta las líneas ya aplicadas.
-        /// </summary>
-        private async Task<Error?> ReserveStockAsync(
-            IReadOnlyList<OrderLineRequest> lines,
-            CancellationToken cancellationToken
-        )
-        {
-            foreach (var line in lines)
+            foreach (var line in lines.OrderBy(l => l.ProductId))
             {
                 var affected = await db
                     .Products.Where(p => p.Id == line.ProductId && p.Stock >= line.Quantity)
@@ -360,57 +461,89 @@ namespace API.Furnistore.Application.Orders
                     );
 
                 if (affected == 0)
-                {
-                    var stock = await db
-                        .Products.Where(p => p.Id == line.ProductId)
-                        .Select(p => (int?)p.Stock)
-                        .FirstOrDefaultAsync(cancellationToken);
-
-                    logger.LogWarning(
-                        ApiEvents.OrderRejected,
-                        "Order rejected: concurrent stock reservation failed for product {ProductId}",
-                        line.ProductId
-                    );
-
-                    return Error.Conflict(
-                        "order.insufficient_stock",
-                        stock is null
-                            ? $"El producto {line.ProductId} ya no existe."
-                            : $"Stock insuficiente para el producto {line.ProductId}: quedan {stock}."
-                    );
-                }
+                    return line.ProductId;
             }
 
             return null;
         }
 
-        private async Task RestoreStockAsync(
-            IEnumerable<OrderDetail> details,
+        private Error CheckoutRejected(Error error, string userId)
+        {
+            logger.LogWarning(
+                ApiEvents.CheckoutRejected,
+                "Checkout rejected for {UserId}: {Code}",
+                userId,
+                error.Code
+            );
+            return error;
+        }
+
+        private async Task<Dictionary<int, string?>> LoadImagesAsync(
+            IEnumerable<Order> orders,
             CancellationToken cancellationToken
         )
         {
-            foreach (var detail in details)
-            {
-                await db
-                    .Products.Where(p => p.Id == detail.ProductId)
-                    .ExecuteUpdateAsync(
-                        setters => setters.SetProperty(p => p.Stock, p => p.Stock + detail.Quantity),
-                        cancellationToken
-                    );
-            }
+            var productIds = orders
+                .SelectMany(order => order.OrderDetails)
+                .Select(detail => detail.ProductId)
+                .Distinct()
+                .ToList();
+
+            return await db
+                .Products.Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.ImageUrl, cancellationToken);
         }
 
-        private static OrderResponse ToResponse(Order order) =>
+        private static OrderResponse ToResponse(Order order, IReadOnlyDictionary<int, string?> images) =>
             new(
                 order.Id,
                 order.OrderNumber,
-                order.ClientId,
-                order.OrderDate,
-                order.DeliveryDate,
                 order.Status,
+                order.Status == OrderStatus.Paid,
+                order.PlacedAt,
+                order.PaidAt,
+                order.EstimatedDeliveryDate,
+                order.ShippedAt,
+                order.DeliveredAt,
+                order.CancelledAt,
+                order.CancelReason,
+                order.Subtotal,
+                order.ShippingCost,
                 order.Total,
-                order.OrderDetails.Select(d => new OrderLineResponse(d.ProductId, d.Quantity, d.UnitPrice)).ToList()
+                new OrderShipToResponse(
+                    order.ShipToName,
+                    order.ShipToPhone,
+                    new ShippingAddress
+                    {
+                        Street = order.ShipToStreet,
+                        City = order.ShipToCity,
+                        Province = order.ShipToProvince,
+                        DeliveryNotes = order.ShipToDeliveryNotes,
+                    }
+                ),
+                order
+                    .OrderDetails.OrderBy(d => d.ProductName)
+                    .ThenBy(d => d.ProductId)
+                    .Select(d => new OrderLineResponse(
+                        d.ProductId,
+                        d.ProductName,
+                        images.GetValueOrDefault(d.ProductId),
+                        d.Quantity,
+                        d.UnitPrice,
+                        d.UnitPrice * d.Quantity
+                    ))
+                    .ToList()
             );
+
+        private static string StatusLabel(OrderStatus status) =>
+            status switch
+            {
+                OrderStatus.Paid => "pagado",
+                OrderStatus.Shipped => "enviado",
+                OrderStatus.Delivered => "entregado",
+                OrderStatus.Cancelled => "cancelado",
+                _ => status.ToString(),
+            };
 
         private Error NotFound(int id)
         {

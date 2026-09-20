@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using API.Furnistore.Application.Clients;
 using API.Furnistore.Shared;
 
 namespace API.Furnistore.Application.Orders
@@ -13,81 +14,49 @@ namespace API.Furnistore.Application.Orders
 
         [Range(1, int.MaxValue)]
         public int? ClientId { get; init; }
+
+        public OrderStatus? Status { get; init; }
     }
 
-    public sealed record OrderLineRequest
+    public sealed record CheckoutRequest
     {
-        [Range(1, int.MaxValue)]
-        public int ProductId { get; init; }
-
-        [Range(1, 10_000)]
-        public int Quantity { get; init; }
+        [Range(typeof(decimal), "0", "100000000")]
+        public decimal ExpectedTotal { get; init; }
     }
 
-    public sealed record CreateOrderRequest : IValidatableObject
+    public sealed record CancelOrderRequest
     {
-        [Range(1, int.MaxValue)]
-        public int? ClientId { get; init; }
-
-        public DateTime OrderDate { get; init; }
-
-        public DateTime DeliveryDate { get; init; }
-
-        [Required, MinLength(1, ErrorMessage = "La orden debe tener al menos una línea.")]
-        public required IReadOnlyList<OrderLineRequest> Lines { get; init; }
-
-        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
-            OrderRules.Validate(OrderDate, DeliveryDate, Lines);
+        [StringLength(300)]
+        public string? Reason { get; init; }
     }
 
-    public sealed record UpdateOrderRequest : IValidatableObject
-    {
-        [Range(1, int.MaxValue)]
-        public int? ClientId { get; init; }
+    public sealed record OrderLineResponse(
+        int ProductId,
+        string ProductName,
+        string? ImageUrl,
+        int Quantity,
+        decimal UnitPrice,
+        decimal LineTotal
+    );
 
-        public DateTime OrderDate { get; init; }
-
-        public DateTime DeliveryDate { get; init; }
-
-        [Required, MinLength(1, ErrorMessage = "La orden debe tener al menos una línea.")]
-        public required IReadOnlyList<OrderLineRequest> Lines { get; init; }
-
-        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
-            OrderRules.Validate(OrderDate, DeliveryDate, Lines);
-    }
-
-    internal static class OrderRules
-    {
-        public static IEnumerable<ValidationResult> Validate(
-            DateTime orderDate,
-            DateTime deliveryDate,
-            IReadOnlyList<OrderLineRequest>? lines
-        )
-        {
-            if (deliveryDate.Date < orderDate.Date)
-                yield return new ValidationResult(
-                    "deliveryDate no puede ser anterior a orderDate.",
-                    new[] { nameof(CreateOrderRequest.DeliveryDate) }
-                );
-
-            if (lines is not null && lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
-                yield return new ValidationResult(
-                    "No puede repetirse el mismo productId en varias líneas.",
-                    new[] { nameof(CreateOrderRequest.Lines) }
-                );
-        }
-    }
-
-    public sealed record OrderLineResponse(int ProductId, int Quantity, decimal UnitPrice);
+    public sealed record OrderShipToResponse(string Name, string Phone, ShippingAddress Address);
 
     public sealed record OrderResponse(
         int Id,
         int OrderNumber,
-        int ClientId,
-        DateTime OrderDate,
-        DateTime DeliveryDate,
         OrderStatus Status,
+        bool CanCancel,
+        DateTime PlacedAt,
+        DateTime? PaidAt,
+        DateOnly EstimatedDeliveryDate,
+        DateTime? ShippedAt,
+        DateTime? DeliveredAt,
+        DateTime? CancelledAt,
+        string? CancelReason,
+        decimal Subtotal,
+        decimal ShippingCost,
         decimal Total,
+        OrderShipToResponse ShipTo,
         IReadOnlyList<OrderLineResponse> Lines
     );
 }

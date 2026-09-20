@@ -3,6 +3,7 @@ using API.Furnistore.Application.Orders;
 using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace API.Furnistore.API.Controllers
 {
@@ -24,37 +25,49 @@ namespace API.Furnistore.API.Controllers
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await orders.GetByIdAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
 
-        [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [HttpPost("checkout")]
         [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> Create(
-            CreateOrderRequest request,
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Checkout(
+            CheckoutRequest request,
             CancellationToken cancellationToken
         )
         {
-            var result = await orders.CreateAsync(request, User.UserId(), User.IsInRole("Admin"), cancellationToken);
+            var result = await orders.CheckoutAsync(request, User.UserId(), cancellationToken);
 
             return result.IsSuccess
                 ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
                 : result.ToActionResult(this);
         }
 
-        [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<IActionResult> Update(
+        [HttpPost("{id:int}/cancel")]
+        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Cancel(
             int id,
-            UpdateOrderRequest request,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CancelOrderRequest? request,
             CancellationToken cancellationToken
         ) =>
-            (await orders.UpdateAsync(id, request, User.UserId(), User.IsInRole("Admin"), cancellationToken))
-                .ToNoContentResult(this);
+            (await orders.CancelAsync(id, request ?? new(), User.UserId(), User.IsInRole("Admin"), cancellationToken))
+                .ToActionResult(this);
 
-        [HttpDelete("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
-            (await orders.DeleteAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken))
-                .ToNoContentResult(this);
+        [HttpPost("{id:int}/ship")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Ship(int id, CancellationToken cancellationToken) =>
+            (await orders.ShipAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
+
+        [HttpPost("{id:int}/deliver")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Deliver(int id, CancellationToken cancellationToken) =>
+            (await orders.DeliverAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
     }
 }

@@ -16,7 +16,6 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId CategoryNameTaken = new(1111, nameof(CategoryNameTaken));
         public static readonly EventId CategoryInUse = new(1112, nameof(CategoryInUse));
 
-        public static readonly EventId ClientCreated = new(1201, nameof(ClientCreated));
         public static readonly EventId ClientUpdated = new(1202, nameof(ClientUpdated));
         public static readonly EventId ClientDeleted = new(1203, nameof(ClientDeleted));
         public static readonly EventId ClientNotFound = new(1210, nameof(ClientNotFound));
@@ -37,11 +36,13 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId EmailConfirmationFailed = new(2013, nameof(EmailConfirmationFailed));
         public static readonly EventId EmailSendFailed = new(2020, nameof(EmailSendFailed));
 
-        public static readonly EventId OrderCreated = new(3001, nameof(OrderCreated));
-        public static readonly EventId OrderUpdated = new(3002, nameof(OrderUpdated));
-        public static readonly EventId OrderDeleted = new(3003, nameof(OrderDeleted));
+        public static readonly EventId CheckoutCompleted = new(3004, nameof(CheckoutCompleted));
+        public static readonly EventId OrderShipped = new(3005, nameof(OrderShipped));
+        public static readonly EventId OrderDelivered = new(3006, nameof(OrderDelivered));
+        public static readonly EventId OrderCancelled = new(3007, nameof(OrderCancelled));
         public static readonly EventId OrderNotFound = new(3010, nameof(OrderNotFound));
-        public static readonly EventId OrderRejected = new(3011, nameof(OrderRejected));
+        public static readonly EventId CheckoutRejected = new(3012, nameof(CheckoutRejected));
+        public static readonly EventId OrderTransitionRejected = new(3013, nameof(OrderTransitionRejected));
 
         public static readonly EventId RequestCompleted = new(5001, nameof(RequestCompleted));
         public static readonly EventId UnhandledException = new(5002, nameof(UnhandledException));

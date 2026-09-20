@@ -13,6 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using NLog;
 using NLog.Web;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var logger = NLog.LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
 logger.Debug("init main");
@@ -21,6 +23,19 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // Esto es para evitar que el CORS nos bloquee cuando tengamos una pantalla admin
+    var corsOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+    ?? "http://localhost:3000,http://localhost:3001")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("WebApp", policy =>
+            policy.WithOrigins(corsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
+    });
 
     if (builder.Environment.IsDevelopment())
     {
@@ -50,6 +65,8 @@ try
     Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
     builder.Services.AddApplicationServices();
     builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddHealthChecks()
+    .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
     builder.Services.AddSwaggerGen(c =>
     {
         c.SwaggerDoc("v1", new OpenApiInfo { Title = "furnistore_API", Version = "v1" });
@@ -83,6 +100,8 @@ try
             }
         );
     });
+
+    
 
     var connectionString =
         Environment.GetEnvironmentVariable("DATABASE_URL")
@@ -158,6 +177,22 @@ try
         ClockSkew = TimeSpan.Zero,
     };
 
+    
+    // Limita el numeor de intento que puede hacer el usario al equivocarse...
+    // O sea, que si se equivoca 5 veces tiene que esperar 1 minuto para poder hacer otros
+    // 5 intentos.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.AddFixedWindowLimiter("auth", opt =>
+        {
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.PermitLimit = 5;
+            opt.QueueLimit = 0;
+        });
+
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    });
+
     builder.Services.AddSingleton(tokenValidationParameters);
 
     builder
@@ -220,12 +255,15 @@ try
         app.UseHttpsRedirection();
 
     app.UseRouting();
+    app.UseCors("WebApp");
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseRateLimiter();
     app.MapControllers();
 
     app.LogRegisteredEndpoints();
-
+    // Es la forma que tenemos de saber si esta vivo o no el servidor
+    app.MapHealthChecks("/health");
     app.Run();
 }
 catch (Exception ex)

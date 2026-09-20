@@ -277,7 +277,7 @@ Las minúsculas son convención REST y evitan la ambigüedad de mayúsculas entr
 
 **Decisión.** En `Development`, el arranque imprime las 24 rutas agrupadas por controlador, con una columna de acceso.
 
-La columna publico/JWT sigue añadiendo valor, pero hoy no distingue Admin de User: AccessOf lee IAuthorizeData y no los roles del atributo. El agujero de §1.2 del roadmap ya está cerrado, pero el listado no lo refleja.
+La columna publico/JWT sigue añadiendo valor, pero hoy no distingue Admin de User: AccessOf lee IAuthorizeData y no los roles del atributo. El agujero de §1.2 del roadmap ya está cerrado, pero el listado no lo refleja. Tampoco lista `/health`, que no es una acción de controlador.
 
 Solo en `Development`, para no ensuciar los logs JSON de producción con 24 líneas por arranque.
 
@@ -348,10 +348,8 @@ Lo que este diseño **no** resuelve, para que nadie lo descubra por sorpresa.
 | **Dos viajes por página** | Descrito en §3.8. Mitigado con precalentamiento, no eliminado |
 | **Búsqueda sensible a acentos** | `lampara` no encuentra «Lámpara». Requiere la extensión `unaccent` de Postgres y una migración |
 | **Frontera `Application` porosa** | `UserManager` de Identity entra transitivamente; `API` sigue viendo `Data` por necesidad del composition root (§3.2) |
-| **Sin rol `Admin`** | `api-roadmap.md` §1.2. Cualquier usuario registrado puede escribir en el catálogo. Visible en el listado de arranque |
 | **`Client` sin FK a `IdentityUser`** | `api-roadmap.md` §1.3. De esto cuelga todo el checkout |
-| **Sin CORS ni health check** | `api-roadmap.md` §3.8. Hoy funciona porque Next actúa de proxy desde el servidor |
-| **Sin rate limiting** | Login y registro quedan expuestos a fuerza bruta |
+| **Rate limiting solo en auth** | `api-roadmap.md` §3.8. La política `"auth"` cubre `AuthenticationController` entero (5/min). Falta extenderla a los endpoints de cuenta cuando existan |
 
 ### Código eliminado por el refactor
 

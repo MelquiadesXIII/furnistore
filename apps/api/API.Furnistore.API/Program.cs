@@ -13,6 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using NLog;
 using NLog.Web;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var logger = NLog.LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
 logger.Debug("init main");
@@ -21,11 +23,28 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // Esto es para evitar que el CORS nos bloquee cuando tengamos una pantalla admin
+    var corsOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+    ?? "http://localhost:3000,http://localhost:3001")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("WebApp", policy =>
+            policy.WithOrigins(corsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
+    });
+
     if (builder.Environment.IsDevelopment())
     {
+        // le puse estas 3 rutas porque con la ruta que necesitaba estaba dando bateo
+                // y entonces volvi a poner como lo encontre y decidi poner ambas para evitar
+                // que se rompa en alguna PC
         DotEnv.Load(
             options: new DotEnvOptions(
-                envFilePaths: new[] { "../.env" },
+                envFilePaths: new[] { ".env", "../.env", "../../.env" },
                 overwriteExistingVars: false
             )
         );
@@ -43,9 +62,11 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor,
-        Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
+    Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
     builder.Services.AddApplicationServices();
     builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddHealthChecks()
+    .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
     builder.Services.AddSwaggerGen(c =>
     {
         c.SwaggerDoc("v1", new OpenApiInfo { Title = "furnistore_API", Version = "v1" });
@@ -80,6 +101,8 @@ try
         );
     });
 
+    
+
     var connectionString =
         Environment.GetEnvironmentVariable("DATABASE_URL")
         ?? builder.Configuration.GetConnectionString("APIFurnistoreContext")
@@ -99,7 +122,6 @@ try
             }
         )
     );
-
     builder.Services.AddHostedService<DatabaseWarmupService>();
 
     //Configurar JWT con variables de entorno
@@ -155,6 +177,22 @@ try
         ClockSkew = TimeSpan.Zero,
     };
 
+    
+    // Limita el numeor de intento que puede hacer el usario al equivocarse...
+    // O sea, que si se equivoca 5 veces tiene que esperar 1 minuto para poder hacer otros
+    // 5 intentos.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.AddFixedWindowLimiter("auth", opt =>
+        {
+            opt.Window = TimeSpan.FromMinutes(1);
+            opt.PermitLimit = 5;
+            opt.QueueLimit = 0;
+        });
+
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    });
+
     builder.Services.AddSingleton(tokenValidationParameters);
 
     builder
@@ -170,6 +208,7 @@ try
             jwt.TokenValidationParameters = tokenValidationParameters;
         });
 
+
     builder
         .Services.AddDefaultIdentity<IdentityUser>(options =>
         {
@@ -180,14 +219,28 @@ try
             options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
         })
+        // La Linea de abajo es para el tema de los roles en la pagina web.
+        .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<APIFurnistoreContext>();
 
     // NLog
     builder.Logging.ClearProviders();
     builder.Host.UseNLog();
-    
+
     var app = builder.Build();
 
+    // Esto es para la asignacion del rol.
+    using (var scope = app.Services.CreateScope())
+    {
+        var roleManager = scope.ServiceProvider
+            .GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync("Admin"))
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+
+        if (!await roleManager.RoleExistsAsync("User"))
+            await roleManager.CreateAsync(new IdentityRole("User"));
+    }
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {
@@ -202,12 +255,15 @@ try
         app.UseHttpsRedirection();
 
     app.UseRouting();
+    app.UseCors("WebApp");
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseRateLimiter();
     app.MapControllers();
 
     app.LogRegisteredEndpoints();
-
+    // Es la forma que tenemos de saber si esta vivo o no el servidor
+    app.MapHealthChecks("/health");
     app.Run();
 }
 catch (Exception ex)

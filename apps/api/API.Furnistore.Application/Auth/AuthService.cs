@@ -74,7 +74,11 @@ namespace API.Furnistore.Application.Auth
             }
 
             logger.LogInformation(ApiEvents.UserRegistered, "User {UserId} registered", user.Id);
-
+            
+            // Se asinga un rol user por defecto.
+            if (!await userManager.IsInRoleAsync(user, "User"))
+                await userManager.AddToRoleAsync(user, "User");
+            
             var emailSent = await TrySendVerificationEmailAsync(user, cancellationToken);
 
             return Result.Ok(new RegisterResponse(emailSent));
@@ -255,18 +259,27 @@ namespace API.Furnistore.Application.Auth
             var key = Encoding.UTF8.GetBytes(jwt.Secret);
             var jti = Guid.NewGuid().ToString();
             var now = DateTime.UtcNow;
+            // cojo el rol del usuario
+            var roles = await userManager.GetRolesAsync(user);
+
+            // Aqui cojo el clain 
+            var claims = new List<Claim>
+            {
+                new Claim("Id", user.Id),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Email!),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email!),
+                new Claim(JwtRegisteredClaimNames.Jti, jti),
+            };
+
+            // Por cada rol que tenga el usaurio le pongo un Clain
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
 
             var descriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(
-                    new[]
-                    {
-                        new Claim("Id", user.Id),
-                        new Claim(JwtRegisteredClaimNames.Sub, user.Email!),
-                        new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-                        new Claim(JwtRegisteredClaimNames.Jti, jti),
-                    }
-                ),
+                Subject = new ClaimsIdentity(claims),
                 IssuedAt = now,
                 NotBefore = now,
                 Expires = now.Add(jwt.ExpiryTime),

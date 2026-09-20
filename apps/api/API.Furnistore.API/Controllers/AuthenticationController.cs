@@ -2,11 +2,14 @@ using API.Furnistore.API.Extensions;
 using API.Furnistore.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace API.Furnistore.API.Controllers
 {
     [ApiController]
     [AllowAnonymous]
+    // Lo de abajo es para limitar el numero de intentos por minuto de un usaurio...
+    [EnableRateLimiting("auth")]
     [Route("api/authentication")]
     public sealed class AuthenticationController(AuthService auth) : ControllerBase
     {

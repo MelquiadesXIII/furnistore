@@ -86,6 +86,7 @@ namespace API.Furnistore.Application.Products
                 Name = request.Name.Trim(),
                 Price = request.Price,
                 ProductCategoryId = request.ProductCategoryId,
+                ImageUrl = string.IsNullOrWhiteSpace(request.ImageUrl) ? null : request.ImageUrl.Trim(),
             };
 
             db.Products.Add(product);
@@ -137,6 +138,7 @@ namespace API.Furnistore.Application.Products
             product.Name = request.Name.Trim();
             product.Price = request.Price;
             product.ProductCategoryId = request.ProductCategoryId;
+            product.ImageUrl = string.IsNullOrWhiteSpace(request.ImageUrl) ? null : request.ImageUrl.Trim();
 
             await db.SaveChangesAsync(cancellationToken);
 

@@ -27,7 +27,9 @@ namespace API.Furnistore.API.Controllers
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await products.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
 
-        [Authorize]
+        // en caso de que de error o bateo algun dia solo es cambiar de lo que esta puesto por
+        // [Authorize] y cuando se pueda arreglar poner: [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         [ProducesResponseType<ProductResponse>(StatusCodes.Status201Created)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -43,7 +45,7 @@ namespace API.Furnistore.API.Controllers
                 : result.ToActionResult(this);
         }
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -55,7 +57,7 @@ namespace API.Furnistore.API.Controllers
             (await products.UpdateAsync(id, request, User.UserId(), cancellationToken))
                 .ToNoContentResult(this);
 
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

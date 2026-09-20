@@ -4,7 +4,7 @@ Análisis del estado de `apps/api` frente a lo que necesita una tienda online re
 
 Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y a [`api-architecture.md`](./api-architecture.md), que explica **cómo está construida y por qué**. Este documento apunta a lo que **debería** hacer.
 
-> **Actualizado: 2026-09-06**, tras el refactor de arquitectura (commits `035b2`…`7734a`). Los puntos marcados **✅ Resuelto** se comprobaron ejecutando peticiones reales contra la API. Los marcados *verificado* en el análisis original siguen reproduciéndose salvo que se indique lo contrario.
+> Actualizado: 2026-09-19, tras incorporar rate limiting en auth, CORS, health check, paginación en Clients/Orders/ProductCategories y restringir Clients y la lectura de Orders a Admin. Los puntos marcados **✅ Resuelto** se comprobaron ejecutando peticiones reales contra la API. Los marcados *verificado* en el análisis original siguen reproduciéndose salvo que se indique lo contrario.
 
 ## Resumen del estado
 
@@ -12,7 +12,7 @@ Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y 
 |---|---|
 | §1 Bloqueantes | 2 de 4 resueltos. Quedan **roles `Admin`** y **`Client.UserId`** |
 | §2 Endpoints a mejorar | 7 de 12 resueltos. Los 5 restantes dependen de §1.2 o §1.3 |
-| §3 Endpoints que faltan | Sin cambios: sigue faltando todo salvo el middleware de errores |
+| §3 Endpoints que faltan | Resueltos middleware de errores, CORS, health check y rate limiting de auth. El resto sigue pendiente |
 | §4 Cambios de modelo | Sin cambios: ninguno aplicado |
 | §6 Deuda del refactor | **Nuevo.** Lo que introdujo o dejó abierto el propio refactor |
 
@@ -20,9 +20,19 @@ Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y 
 
 ## 1. Bloqueantes actuales
 
-### 1.1 El registro devuelve 500 y aun así crea el usuario — ✅ Resuelto
+1.1 El registro devuelve 500 y aun así crea el usuario — ✅ Resuelto
 
-`AuthService.RegisterAsync` envuelve el envío del correo en `TrySendVerificationEmailAsync`, que captura cualquier excepción, la registra como `EmailSendFailed` (EventId 2020) y devuelve `false`. El registro ya no falla porque el SMTP no responda:
+AuthService.RegisterAsync envuelve el envío del correo en TrySendVerificationEmailAsync, que captura cualquier excepción, la registra como EmailSendFailed (EventId 2020) y devuelve false. El registro ya no falla porque el SMTP no responda:
+bash
+
+curl -X POST http://localhost:5135/api/authentication/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Test","emailAddress":"probe@example.com","password":"Passw0rd123"}'
+# → 200 {"emailSent":false}     (antes: 500 con el stack trace de MailKit)
+
+La filtración de stack traces también se cerró: GlobalExceptionHandler devuelve ProblemDetails sin traza, y deja la excepción completa solo en el log del servidor.
+
+Sigue pendiente de §3.1: no existe ResendConfirmation. Una cuenta cuyo correo nunca llegó sigue sin poder desbloquearse sola — solo que ahora el usuario recibe {"emailSent": false} y sabe que algo pasó, en vez de un 500 opaco.
 
 ```bash
 curl -X POST http://localhost:5135/api/authentication/register \
@@ -35,21 +45,17 @@ La filtración de stack traces también se cerró: `GlobalExceptionHandler` devu
 
 **Sigue pendiente de §3.1:** no existe `ResendConfirmation`. Una cuenta cuyo correo nunca llegó sigue sin poder desbloquearse sola — solo que ahora el usuario recibe `{"emailSent": false}` y sabe que algo pasó, en vez de un 500 opaco.
 
-### 1.2 Cualquier cliente registrado puede modificar el catálogo — ❌ Pendiente
+1.2 Cualquier cliente registrado puede modificar el catálogo — ✅ Resuelto
 
-Sin cambios. `Program.cs` sigue usando `AddDefaultIdentity<IdentityUser>()` sin `.AddRoles<IdentityRole>()`. `[Authorize]` sigue significando solo "trae un token válido".
+Program.cs ahora usa .AddRoles<IdentityRole>() y crea los roles Admin y User al arrancar si no existen. ProductsController y ProductCategoriesController exigen [Authorize(Roles = "Admin")] en POST, PUT y DELETE; las lecturas siguen públicas con [AllowAnonymous].
 
-El listado de rutas que ahora imprime el arranque lo hace visible en cada `pnpm dev`:
+AuthService.RegisterAsync asigna el rol User a cada cuenta nueva, y IssueTokensAsync incluye los roles como claims en el JWT — sin eso, [Authorize(Roles = ...)] no tendría de dónde leerlos.
 
-```
-POST   /api/products                              JWT
-DELETE /api/products/{id:int}                     JWT
-```
+Quedan dos flecos:
 
-Dice `JWT`, no `Admin`. **Es el agujero de seguridad más grave que queda en el backend.**
+    No hay administrador inicial. Promover una cuenta a Admin hoy requiere SQL directo contra AspNetUserRoles. Falta el seed y los endpoints de §3.7.
 
-**Qué hace falta:** `AddRoles<IdentityRole>()`, seed del rol `Admin`, `[Authorize(Roles = "Admin")]` en toda mutación de catálogo, y un usuario administrador inicial. Cuando esté, la columna del listado de arranque debería pasar a decir `Admin` — verificación gratis en cada arranque.
-
+    El listado de arranque no lo refleja. EndpointLoggingExtensions.AccessOf solo mira IAuthorizeData, así que las rutas con rol siguen imprimiéndose como JWT. El filtro real está aplicado; es cosmético.
 ### 1.3 `Client` no está conectado a `IdentityUser` — ❌ Pendiente
 
 Sin cambios. Registrarse crea un `IdentityUser` y nunca un `Client`. No hay forma de saber qué cliente es el usuario del token.
@@ -85,11 +91,11 @@ Verificado: renovar funciona; reutilizar el mismo refresh token devuelve `401` (
 | `GET /api/Products/GetByCategory/{id}` | Verbo en la ruta, segmento en PascalCase | ✅ **Resuelto de otra forma.** El endpoint se eliminó; ahora es `GET /api/products?categoryId={id}`, que además compone con el resto de filtros |
 | `GET /api/Test` | Endpoint público que refleja input | ✅ **Eliminado** |
 | `GET /api/Authentication/ConfirmEmail` | Devolvía un string plano | ⚠️ **Parcial.** La confirmación mantiene la retroalimentación visible en el navegador: devuelve `200 OK` con texto plano cuando tiene éxito y `ProblemDetails` cuando falla. Sigue pendiente redirigir al frontend para mostrar una página HTML profesional con estados, contador y redirección automática; ver [`API_llama_al_frontend.md`](./API_llama_al_frontend.md) |
-| `GET /api/orders` | No filtra por dueño: cualquier autenticado lista las órdenes de todos | ❌ **Pendiente.** Requiere §1.3. Acepta `?clientId=` como filtro opcional, pero no lo impone |
-| `GET /api/orders/{id}` | Sin verificación de propiedad (IDOR) | ❌ **Pendiente.** Requiere §1.3 |
+| `GET /api/orders` | No filtra por dueño: cualquier autenticado lista las órdenes de todos | ⚠️ **Parcial.** Ahora exige rol `Admin`, pero sigue sin filtrar por dueño. Un `User` no puede listar; un `Admin` sigue viendo todas. Requiere §1.3 para que un `User` vea solo las suyas |
+| `GET /api/orders/{id}` | Sin verificación de propiedad (IDOR) | ⚠️ **Parcial.** Igual que el anterior: `Admin` ve cualquier orden, `User` no ve ninguna. Requiere §1.3 para acotar por dueño |
 | `POST /api/orders` | Confía en el `ClientId` del cuerpo; no calcula ni valida precios | ⚠️ **Parcial.** Ahora valida que el cliente y todos los productos existan, que haya al menos una línea, que no se repita `productId` y que `quantity >= 1`. Sigue confiando en el `ClientId` que manda el cliente, y sigue sin calcular precios |
 | `PUT` / `DELETE /api/orders` | Una orden es un registro financiero: no se edita ni se borra | ❌ **Pendiente.** Ambos siguen existiendo. Requiere `Order.Status` (§4) para sustituirlos por cancelación |
-| `GET /api/clients` | Expone PII de todos los clientes a cualquier autenticado | ❌ **Pendiente.** Requiere §1.2 para restringir a `Admin` |
+| `GET /api/clients` | Expone PII de todos los clientes a cualquier autenticado | ✅ **Resuelto.** `ClientsController` exige `[Authorize(Roles = "Admin")]` a nivel de clase |
 
 ---
 
@@ -179,34 +185,36 @@ Requisito transversal: **el precio nunca viaja desde el cliente**, siempre se le
 | `GET /api/admin/orders` | Todas las órdenes con filtros por estado, rango de fechas y cliente. Paginado |
 | `GET /api/admin/clients` | Listado de clientes, paginado. Sustituye al `GET /api/clients` actual |
 
-Prerrequisito de toda esta sección: que exista el rol `Admin` (§1.2).
+El prerrequisito de §1.2 ya está cumplido: el rol Admin existe, el seed está en el arranque, las mutaciones del catálogo lo exigen y la lectura de clientes está restringida a Admin. Lo que falta es la gestión de usuarios — no hay forma de promover una cuenta a Admin salvo por SQL directo, y no existe un administrador inicial.
 
 ### 3.8 Transversal
 
 | Tema | Estado |
 |---|---|
 | **Middleware global de errores** | ✅ **Resuelto.** `GlobalExceptionHandler` + `AddProblemDetails()`. Formato `ProblemDetails` consistente, sin stack traces, con `traceId` correlacionable con el log |
-| **`GET /health`** | ❌ Pendiente. No existe ningún health check |
-| **CORS** | ❌ Pendiente. Funciona solo porque Next actúa de proxy desde el servidor; cualquier llamada directa desde el navegador fallaría |
-| **Rate limiting** | ❌ Pendiente. Login, registro y recuperación de contraseña siguen expuestos a fuerza bruta. .NET 8+ trae `AddRateLimiter` de serie |
+| **`GET /health`** | ✅ **Resuelto.** `MapHealthChecks("/health")` con `AddDbContextCheck<APIFurnistoreContext>` |
+| **CORS** | ✅ **Resuelto.** Política `WebApp` en `Program.cs`, orígenes desde `CORS_ORIGINS` (por defecto `localhost:3000,3001`), con `AllowCredentials()` |
+| **Rate limiting** | ⚠️ **Parcial.** `AuthenticationController` tiene `[EnableRateLimiting("auth")]`: 5 intentos por minuto, ventana fija. Cubre login, registro, refresh y confirmación. Falta extenderlo a los endpoints de cuenta de §3.1 cuando existan |
 
 ---
 
 ## 4. Cambios de modelo de los que dependen esos endpoints
 
-**Ninguno aplicado todavía.** Sin estos cambios de esquema, buena parte de lo anterior no se puede implementar.
+**Aplicados parcialmente.** `Product.ImageUrl` y `IdentityRole` ya están en el modelo; el resto sigue pendiente.
 
-| Cambio | Por qué |
+| Cambio | Estado |
 |---|---|
-| `Client.UserId` → FK a `AspNetUsers.Id` | Desbloquea `/me`, la propiedad de las órdenes y el checkout completo (§1.3) |
-| `OrderDetail.UnitPrice` | **El más crítico.** Hoy el detalle solo guarda cantidad, así que si cambias el precio de un producto, el valor histórico de todas las órdenes pasadas cambia solo. Es corrupción silenciosa de datos contables |
-| `Order.Status` | No hay ciclo de vida de la orden. Sin esto no se pueden sustituir el `PUT`/`DELETE` del §2 |
-| `Order.Total`, `Order.Currency` | El total debe quedar congelado en la orden, no recalcularse desde precios vivos |
-| Snapshot de dirección de envío en `Order` | La dirección del cliente puede cambiar después de la compra; el envío ya realizado no |
-| `Product`: `Description`, `Stock`, `IsActive`, `Sku`, `Slug`, `ImageUrl`, `CreatedAt` | El modelo actual solo tiene `Id`, `Name`, `Price`, `ProductCategoryId` |
-| Entidades nuevas: `Cart`, `CartItem`, `Address`, `ProductImage` | No existen |
-| `IdentityRole` | Sin roles no hay separación cliente/administrador (§1.2) |
+| `Client.UserId` → FK a `AspNetUsers.Id` | ❌ Pendiente |
+| `OrderDetail.UnitPrice` | ❌ Pendiente |
+| `Order.Status` | ❌ Pendiente |
+| `Order.Total`, `Order.Currency` | ❌ Pendiente |
+| Snapshot de dirección de envío en `Order` | ❌ Pendiente |
+| `Product.ImageUrl` | ✅ Aplicado. Migración `AddProductImageUrl`, con SQL que puebla las URLs en las filas existentes |
+| `Product.Description`, `Stock`, `IsActive`, `Sku`, `Slug`, `CreatedAt` | ❌ Pendiente |
+| `IdentityRole` + roles `Admin`/`User` | ✅ Aplicado (§1.2) |
+| `Cart`, `CartItem`, `Address`, `ProductImage` | ❌ Pendiente |
 
+> > **Nota sobre `ImageUrl`.** Está en el modelo, en `ProductResponse`, y también en `CreateProductRequest` y `UpdateProductRequest` con validación `[Url, StringLength(500)]`. `ProductService` la normaliza a `null` si viene vacía. El frontend sigue usando el mapa hardcodeado de `product-images.ts` y no consume el campo de la API — conectar ambos lados queda pendiente.
 ---
 
 ## 5. Orden sugerido
@@ -214,14 +222,14 @@ Prerrequisito de toda esta sección: que exista el rol `Admin` (§1.2).
 Revisado tras el refactor. Los cimientos de arquitectura ya están, así que el orden lo marca ahora qué desbloquea qué.
 
 1. **`Client.UserId`** (§1.3). De esta FK cuelgan `/me`, la propiedad de órdenes y todo el checkout. Es el prerrequisito de más cosas que ningún otro punto.
-2. **Rol `Admin`** (§1.2). Cierra el agujero de seguridad del catálogo y desbloquea toda la §3.7. Verificable de un vistazo en el listado de rutas del arranque.
+2. ~~**Rol `Admin`** (§1.2).~~ ✅ **Hecho.** Queda el seed de un admin inicial y los endpoints de administración (§3.7).
 3. **`OrderDetail.UnitPrice` y `Order.Status`** (§4). Antes de que haya órdenes reales en producción cuyo histórico se corrompa.
 4. **Cuenta**: `/me`, `logout`, `resend-confirmation`, recuperación de contraseña (§3.1).
-5. **Campos de `Product`** (`Stock`, `IsActive`, `Description`, `ImageUrl`) y luego el **carrito** (§3.3).
+5. **Campos de `Product`** (`Stock`, `IsActive`, `Description`) — `ImageUrl` ya está y es escribible desde la API — y luego el **carrito** (§3.3).
 6. **Checkout** (§3.4) — recordando la trampa de la estrategia de ejecución.
 7. **Pagos y envíos** (§3.5), **administración** e **imágenes** (§3.6, §3.7).
 
-Transversales (§3.8) en cuanto haya una llamada directa desde el navegador (CORS) o un despliegue que necesite sondas (`/health`). El rate limiting, antes de abrir el registro al público.
+Transversales (§3.8): CORS, `/health` y el rate limiting de auth ya están. Queda extender el rate limiting a los endpoints de cuenta de §3.1 cuando existan.
 
 ---
 
@@ -236,3 +244,5 @@ Lo que no venía del análisis original, sino del propio trabajo de arquitectura
 | **Búsqueda sensible a acentos** | `?search=lampara` no encuentra «Lámpara». Requiere la extensión `unaccent` de Postgres y una migración. No es regresión —el filtro en memoria anterior se comportaba igual— pero es un defecto real en un catálogo en español |
 | **`docs/api.md` quedó obsoleto** | Documenta las rutas viejas (`/api/Products`, `GetByCategory`), el shape de `AuthResult` y el `PUT`/`DELETE` con entidad en el cuerpo. **Nada de eso es cierto ya.** Hay que regenerarlo contra los controladores actuales |
 | **Frontera `Application` porosa** | `UserManager` de Identity entra por vía transitiva desde `Data`, y el proyecto `API` sigue viendo `Data` porque el composition root necesita el tipo del `DbContext`. Lo sostiene la revisión de código, no el compilador |
+| **Listado de endpoints sin distinguir roles** | `AccessOf` solo mira `IAuthorizeData`, así que las rutas con `[Authorize(Roles = "Admin")]` se siguen imprimiendo como `JWT` en el arranque. Cosmético |
+| **Rate limiting solo en auth** | La política `"auth"` cubre `AuthenticationController` entero. Los endpoints de recuperación de contraseña y reenvío de confirmación (§3.1) deberían compartirla o tener la suya. No es deuda del refactor, pero es un fleco abierto por el cambio |

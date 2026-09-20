@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace API.Furnistore.API.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin")]
     [ApiController]
     [Route("api/clients")]
     public sealed class ClientsController(ClientService clients) : ControllerBase

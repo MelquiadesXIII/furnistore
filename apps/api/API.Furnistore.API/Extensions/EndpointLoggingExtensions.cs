@@ -71,7 +71,19 @@ namespace API.Furnistore.API.Extensions
             if (action.EndpointMetadata.OfType<IAllowAnonymous>().Any())
                 return "publico";
 
-            return action.EndpointMetadata.OfType<IAuthorizeData>().Any() ? "JWT" : "publico";
+            var authorizeData = action.EndpointMetadata.OfType<IAuthorizeData>().ToList();
+
+            if (authorizeData.Count == 0)
+                return "publico";
+
+            var roles = authorizeData
+                .Select(a => a.Roles)
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .SelectMany(r => r!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return roles.Count > 0 ? string.Join("+", roles) : "JWT";
         }
     }
 }

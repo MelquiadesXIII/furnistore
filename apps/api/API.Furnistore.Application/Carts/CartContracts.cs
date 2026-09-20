@@ -23,8 +23,15 @@ namespace API.Furnistore.Application.Carts
         string? ImageUrl,
         decimal UnitPrice,
         int Stock,
-        int Quantity
+        int Quantity,
+        decimal LineTotal,
+        bool IsActive
     );
 
-    public sealed record CartResponse(IReadOnlyList<CartItemResponse> Items, decimal Subtotal);
+    public sealed record CartResponse(
+        IReadOnlyList<CartItemResponse> Items,
+        decimal Subtotal,
+        decimal ShippingCost,
+        decimal Total
+    );
 }

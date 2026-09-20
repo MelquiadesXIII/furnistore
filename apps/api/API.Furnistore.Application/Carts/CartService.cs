@@ -1,4 +1,5 @@
 using API.Furnistore.Application.Common;
+using API.Furnistore.Application.Orders;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
 using API.Furnistore.Shared.Common;
@@ -13,7 +14,7 @@ namespace API.Furnistore.Application.Carts
         {
             var clientId = await GetClientIdAsync(userId, cancellationToken);
             if (clientId is null)
-                return Result.Ok(new CartResponse([], 0m));
+                return Result.Ok(new CartResponse([], 0m, 0m, 0m));
 
             return Result.Ok(await BuildCartResponseAsync(clientId.Value, cancellationToken));
         }
@@ -34,6 +35,9 @@ namespace API.Furnistore.Application.Carts
             );
             if (product is null)
                 return Result.Fail<CartResponse>(ProductNotFound(request.ProductId));
+
+            if (!product.IsActive)
+                return Result.Fail<CartResponse>(ProductUnavailable(product.Id));
 
             var item = await db.CartItems.FirstOrDefaultAsync(
                 ci => ci.ClientId == clientId.Value && ci.ProductId == request.ProductId,
@@ -91,15 +95,18 @@ namespace API.Furnistore.Application.Carts
             if (item is null)
                 return Result.Fail<CartResponse>(ItemNotFound(productId));
 
-            var stock = await db.Products
+            var product = await db.Products
                 .Where(p => p.Id == productId)
-                .Select(p => (int?)p.Stock)
+                .Select(p => new { p.Stock, p.IsActive })
                 .FirstOrDefaultAsync(cancellationToken);
-            if (stock is null)
+            if (product is null)
                 return Result.Fail<CartResponse>(ProductNotFound(productId));
 
-            if (request.Quantity > stock)
-                return Result.Fail<CartResponse>(InsufficientStock(productId, stock.Value));
+            if (!product.IsActive)
+                return Result.Fail<CartResponse>(ProductUnavailable(productId));
+
+            if (request.Quantity > product.Stock)
+                return Result.Fail<CartResponse>(InsufficientStock(productId, product.Stock));
 
             item.Quantity = request.Quantity;
             await db.SaveChangesAsync(cancellationToken);
@@ -170,21 +177,40 @@ namespace API.Furnistore.Application.Carts
             CancellationToken cancellationToken
         )
         {
-            var items = await (
+            var rows = await (
                 from cartItem in db.CartItems.AsNoTracking()
                 join product in db.Products.AsNoTracking() on cartItem.ProductId equals product.Id
                 where cartItem.ClientId == clientId
-                select new CartItemResponse(
+                orderby cartItem.Id
+                select new
+                {
                     product.Id,
                     product.Name,
                     product.ImageUrl,
                     product.Price,
                     product.Stock,
-                    cartItem.Quantity
-                )
+                    cartItem.Quantity,
+                    product.IsActive,
+                }
             ).ToListAsync(cancellationToken);
 
-            return new CartResponse(items, items.Sum(i => i.UnitPrice * i.Quantity));
+            var items = rows
+                .Select(row => new CartItemResponse(
+                    row.Id,
+                    row.Name,
+                    row.ImageUrl,
+                    row.Price,
+                    row.Stock,
+                    row.Quantity,
+                    row.Price * row.Quantity,
+                    row.IsActive
+                ))
+                .ToList();
+
+            var subtotal = items.Sum(i => i.LineTotal);
+            var shippingCost = ShippingPolicy.CostFor(subtotal);
+
+            return new CartResponse(items, subtotal, shippingCost, subtotal + shippingCost);
         }
 
         private Error SelfNotFound()
@@ -200,6 +226,12 @@ namespace API.Furnistore.Application.Carts
         {
             logger.LogWarning(ApiEvents.CartRejected, "Product {ProductId} does not exist", productId);
             return Error.Validation("cart.product_not_found", $"No existe el producto {productId}.");
+        }
+
+        private Error ProductUnavailable(int productId)
+        {
+            logger.LogWarning(ApiEvents.CartRejected, "Product {ProductId} is archived", productId);
+            return Error.Conflict("cart.product_unavailable", "Este producto ya no está disponible.");
         }
 
         private Error ItemNotFound(int productId)

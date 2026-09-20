@@ -42,6 +42,10 @@ namespace API.Furnistore.Application.Products
 
         [Range(1, int.MaxValue)]
         public int ProductCategoryId { get; init; }
+
+        // Es para mandarle los datos de la URL de donde esta la foto
+        [Url, StringLength(500)]                   
+        public string? ImageUrl { get; init; }
     }
 
     public sealed record UpdateProductRequest
@@ -54,6 +58,9 @@ namespace API.Furnistore.Application.Products
 
         [Range(1, int.MaxValue)]
         public int ProductCategoryId { get; init; }
+
+        [Url, StringLength(500)]
+        public string? ImageUrl { get; init; }
     }
 
     public sealed record ProductResponse(int Id, string Name, decimal Price, int ProductCategoryId, string? ImageUrl);

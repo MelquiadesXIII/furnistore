@@ -12,6 +12,7 @@ namespace API.Furnistore.API.Controllers
     public sealed class OrdersController(OrderService orders) : ControllerBase
     {
         [HttpGet]
+        [Authorize(Roles = "Admin")] 
         [ProducesResponseType<PagedResult<OrderResponse>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> Search(
             [FromQuery] OrderQuery query,
@@ -19,6 +20,7 @@ namespace API.Furnistore.API.Controllers
         ) => (await orders.SearchAsync(query, cancellationToken)).ToActionResult(this);
 
         [HttpGet("{id:int}")]
+        [Authorize(Roles = "Admin")] 
         [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>

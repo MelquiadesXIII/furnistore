@@ -73,18 +73,11 @@ namespace API.Furnistore.Application.Auth
                 );
             }
 
-            var nameParts = request.Name.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            var firstName = nameParts[0];
-            var lastName = nameParts.Length > 1 ? nameParts[1] : firstName;
-
             db.Clients.Add(new Client
             {
                 UserId = user.Id,
-                FirstName = firstName,
-                LastName = lastName,
-                BirthDate = DateTime.SpecifyKind(DateTime.UtcNow.AddYears(-18).AddDays(-1), DateTimeKind.Utc),
-                Phone = "+10000000000",
-                Address = "Pendiente de completar",
+                FirstName = request.FirstName.Trim(),
+                LastName = request.LastName.Trim(),
             });
             await db.SaveChangesAsync(cancellationToken);
 
@@ -168,8 +161,9 @@ namespace API.Furnistore.Application.Auth
             )
                 return RefreshFailure("unexpected_algorithm", null);
 
+            var tokenHash = RefreshTokenHasher.Hash(request.RefreshToken);
             var storedToken = await db.RefreshTokens.FirstOrDefaultAsync(
-                t => t.Token == request.RefreshToken,
+                t => t.TokenHash == tokenHash,
                 cancellationToken
             );
 
@@ -308,10 +302,11 @@ namespace API.Furnistore.Application.Auth
 
             var jwtToken = handler.WriteToken(handler.CreateToken(descriptor));
 
+            var rawRefreshToken = RandomGenerator.GenerateRandomString(48);
             var refreshToken = new RefreshToken
             {
                 JwtId = jti,
-                Token = RandomGenerator.GenerateRandomString(48),
+                TokenHash = RefreshTokenHasher.Hash(rawRefreshToken),
                 AddedDate = now,
                 ExpiryDate = now.Add(jwt.RefreshTokenLifetime),
                 IsRevoked = false,
@@ -322,7 +317,7 @@ namespace API.Furnistore.Application.Auth
             db.RefreshTokens.Add(refreshToken);
             await db.SaveChangesAsync(cancellationToken);
 
-            return new AuthTokensResponse(jwtToken, refreshToken.Token);
+            return new AuthTokensResponse(jwtToken, rawRefreshToken);
         }
 
         private async Task<bool> TrySendVerificationEmailAsync(
@@ -396,8 +391,9 @@ namespace API.Furnistore.Application.Auth
         CancellationToken cancellationToken
         )
         {
+            var tokenHash = RefreshTokenHasher.Hash(request.RefreshToken);
             var storedToken = await db.RefreshTokens.FirstOrDefaultAsync(
-                t => t.Token == request.RefreshToken,
+                t => t.TokenHash == tokenHash,
                 cancellationToken
             );
 

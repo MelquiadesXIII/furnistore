@@ -4,8 +4,11 @@ namespace API.Furnistore.Application.Auth
 {
     public sealed record RegisterRequest
     {
-        [Required, StringLength(80, MinimumLength = 2)]
-        public required string Name { get; init; }
+        [Required, StringLength(60, MinimumLength = 2)]
+        public required string FirstName { get; init; }
+
+        [Required, StringLength(60, MinimumLength = 2)]
+        public required string LastName { get; init; }
 
         [Required, EmailAddress, StringLength(256)]
         public required string EmailAddress { get; init; }

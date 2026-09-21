@@ -14,18 +14,38 @@ export function RegisterForm({
 }) {
   return (
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="name" className="text-ink-muted">
-          Nombre
-        </Label>
-        <Input
-          id="name"
-          name="name"
-          type="text"
-          required
-          autoComplete="name"
-          className="bg-surface-raised"
-        />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="firstName" className="text-ink-muted">
+            Nombre
+          </Label>
+          <Input
+            id="firstName"
+            name="firstName"
+            type="text"
+            required
+            minLength={2}
+            maxLength={60}
+            autoComplete="given-name"
+            className="bg-surface-raised"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="lastName" className="text-ink-muted">
+            Apellidos
+          </Label>
+          <Input
+            id="lastName"
+            name="lastName"
+            type="text"
+            required
+            minLength={2}
+            maxLength={60}
+            autoComplete="family-name"
+            className="bg-surface-raised"
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">

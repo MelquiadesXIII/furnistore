@@ -21,7 +21,8 @@ export function RegisterContainer() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: formData.get("name"),
+        firstName: formData.get("firstName"),
+        lastName: formData.get("lastName"),
         emailAddress: formData.get("emailAddress"),
         password: formData.get("password"),
       }),

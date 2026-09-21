@@ -3,9 +3,9 @@ import { toUserMessage } from "@/lib/errors";
 import { register } from "@/modules/auth/api";
 
 export async function POST(request: Request) {
-  const { name, emailAddress, password } = await request.json();
+  const { firstName, lastName, emailAddress, password } = await request.json();
 
-  const result = await register(name, emailAddress, password);
+  const result = await register({ firstName, lastName, emailAddress, password });
 
   if (!result.ok) {
     const { error } = result;

@@ -1,8 +1,5 @@
-export type AuthTokens = {
-  token: string;
-  refreshToken: string;
-};
+import type { ApiSchemas } from "@/lib/api/contract";
 
-export type RegisterResult = {
-  emailSent: boolean;
-};
+export type AuthTokens = ApiSchemas["AuthTokensResponse"];
+
+export type RegisterResult = ApiSchemas["RegisterResponse"];

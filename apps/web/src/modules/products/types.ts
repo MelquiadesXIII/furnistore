@@ -1,15 +1,5 @@
-export type Product = {
-  id: number;
-  name: string;
-  price: number;
-  productCategoryId: number;
-  imageUrl: string | null;
-};
+import type { ApiSchemas } from "@/lib/api/contract";
 
-export type Paged<T> = {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-};
+export type Product = ApiSchemas["ProductResponse"];
+
+export type ProductPage = ApiSchemas["ProductResponsePagedResult"];

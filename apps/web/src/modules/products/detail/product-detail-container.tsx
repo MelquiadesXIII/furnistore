@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
+import { Panel } from "@/components/panel";
 import { toUserMessage } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { getProduct } from "@/modules/products/api";
 import { ProductDetailView } from "@/modules/products/detail/product-detail-view";
-import { Panel } from "@/modules/products/panel";
 
 export async function ProductDetailContainer({ id }: { id: number }) {
   const isAuthenticated = Boolean(await getSession());

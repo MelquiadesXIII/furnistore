@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type { Result } from "@/lib/result";
-import type { Paged, Product } from "@/modules/products/types";
+import type { Product, ProductPage } from "@/modules/products/types";
 
 export type ProductSearchParams = {
   page?: number;
@@ -11,7 +11,7 @@ export type ProductSearchParams = {
 
 export function getProducts(
   params: ProductSearchParams = {},
-): Promise<Result<Paged<Product>>> {
+): Promise<Result<ProductPage>> {
   const query = new URLSearchParams();
 
   if (params.page) query.set("page", String(params.page));
@@ -20,7 +20,7 @@ export function getProducts(
   if (params.categoryId) query.set("categoryId", String(params.categoryId));
 
   const qs = query.toString();
-  return apiFetch<Paged<Product>>(`/api/products${qs ? `?${qs}` : ""}`);
+  return apiFetch<ProductPage>(`/api/products${qs ? `?${qs}` : ""}`);
 }
 
 export function getProduct(id: number): Promise<Result<Product>> {

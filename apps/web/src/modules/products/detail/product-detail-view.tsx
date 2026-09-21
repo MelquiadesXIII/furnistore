@@ -2,9 +2,13 @@ import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { FURNITURE_MARKS } from "@/components/furniture-marks";
-import { ComprarButton } from "@/modules/products/comprar-button";
-import { formatPrice } from "@/modules/products/format-price";
+import { formatPrice } from "@/lib/format-price";
+import { AddToCartButton } from "@/modules/cart/add-to-cart-button";
+import { ProductSpecs } from "@/modules/products/detail/product-specs";
+import { buildProductHref } from "@/modules/products/slug";
 import type { Product } from "@/modules/products/types";
+
+const LOW_STOCK = 5;
 
 export function ProductDetailView({
   product,
@@ -43,13 +47,43 @@ export function ProductDetailView({
         </div>
 
         <div className="flex flex-col gap-4">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-            {product.name}
-          </h1>
-          <span className="font-mono text-xl text-ink-muted">{formatPrice(product.price)}</span>
-          <div className="max-w-xs">
-            <ComprarButton isAuthenticated={isAuthenticated} />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+              {product.category.name}
+            </span>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
+              {product.name}
+            </h1>
           </div>
+          <span className="font-mono text-xl text-ink-muted">{formatPrice(product.price)}</span>
+          {!product.isActive ? (
+            <span className="text-sm text-brick">Este producto ya no está disponible.</span>
+          ) : (
+            product.stock > 0 &&
+            product.stock <= LOW_STOCK && (
+              <span className="text-sm text-brick">
+                {product.stock === 1 ? "¡Última unidad!" : `¡Quedan ${product.stock} unidades!`}
+              </span>
+            )
+          )}
+          {product.description && (
+            <p className="leading-relaxed whitespace-pre-line text-ink-muted">
+              {product.description}
+            </p>
+          )}
+          <ProductSpecs product={product} />
+          {product.isActive && (
+            <div className="max-w-sm">
+              <AddToCartButton
+                productId={product.id}
+                productName={product.name}
+                stock={product.stock}
+                isAuthenticated={isAuthenticated}
+                returnTo={buildProductHref(product)}
+                withQuantity
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

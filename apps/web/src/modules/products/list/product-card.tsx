@@ -3,8 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { FURNITURE_MARKS } from "@/components/furniture-marks";
-import { ComprarButton } from "@/modules/products/comprar-button";
-import { formatPrice } from "@/modules/products/format-price";
+import { formatPrice } from "@/lib/format-price";
+import { AddToCartButton } from "@/modules/cart/add-to-cart-button";
 import { buildProductHref } from "@/modules/products/slug";
 import type { Product } from "@/modules/products/types";
 
@@ -54,7 +54,13 @@ export function ProductCard({
             </Link>
             <span className="font-mono text-sm text-ink-muted">{formatPrice(product.price)}</span>
           </div>
-          <ComprarButton isAuthenticated={isAuthenticated} />
+          <AddToCartButton
+            productId={product.id}
+            productName={product.name}
+            stock={product.stock}
+            isAuthenticated={isAuthenticated}
+            returnTo={href}
+          />
         </CardContent>
       </Card>
     </li>

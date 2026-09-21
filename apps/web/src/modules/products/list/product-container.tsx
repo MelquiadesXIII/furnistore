@@ -1,9 +1,9 @@
+import { Panel } from "@/components/panel";
 import { toUserMessage } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { getProducts } from "@/modules/products/api";
 import { ProductGrill } from "@/modules/products/list/product-grill";
 import { ProductPagination } from "@/modules/products/list/product-pagination";
-import { Panel } from "@/modules/products/panel";
 
 const PAGE_SIZE = 12;
 

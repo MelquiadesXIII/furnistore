@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      SUPABASE_URL: https://example.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @furnistore/web gen:api
+      - run: git diff --exit-code -- apps/web/src/lib/api/schema.d.ts
+      - run: pnpm --filter @furnistore/web build
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: apps/api/global.json
+      - run: dotnet restore API.sln
+      - run: dotnet tool restore
+      - run: dotnet build API.sln -c Release --no-restore
+      - run: dotnet swagger tofile --output openapi.json API.Furnistore.API/bin/Release/net10.0/API.Furnistore.API.dll v1
+      - run: git diff --exit-code -- openapi.json
+      - run: dotnet test API.sln -c Release --no-build

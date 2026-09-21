@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
 using NLog;
 using NLog.Web;
 using System.Threading.RateLimiting;
@@ -52,7 +51,7 @@ try
 
     // Add services to the container.
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-    builder.Services.AddControllers();
+    builder.Services.AddApiContract();
     builder.Services.AddProblemDetails(options =>
         options.CustomizeProblemDetails = context =>
         {
@@ -64,44 +63,10 @@ try
     builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor,
     Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
     builder.Services.AddApplicationServices();
-    builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddHealthChecks()
     .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
-    builder.Services.AddSwaggerGen(c =>
-    {
-        c.SwaggerDoc("v1", new OpenApiInfo { Title = "furnistore_API", Version = "v1" });
-        c.AddSecurityDefinition(
-            "Bearer",
-            new OpenApiSecurityScheme()
-            {
-                Name = "Authorization",
-                Type = SecuritySchemeType.ApiKey,
-                Scheme = "Bearer",
-                BearerFormat = "JWT",
-                In = ParameterLocation.Header,
-                Description =
-                    "JWT Authorization header using the Bearer scheme. \n\n Enter prefix (Bearer), space, and then your token. Example 'Bearer 2287386hfdfhj'",
-            }
-        );
-        c.AddSecurityRequirement(
-            new OpenApiSecurityRequirement
-            {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer",
-                        },
-                    },
-                    new string[] { }
-                },
-            }
-        );
-    });
 
-    
+
 
     var connectionString =
         Environment.GetEnvironmentVariable("DATABASE_URL")

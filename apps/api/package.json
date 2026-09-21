@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "dotnet watch --project ./API.Furnistore.API/API.Furnistore.API.csproj run",
     "build": "dotnet build API.sln -c Release",
-    "clean": "dotnet clean API.sln"
+    "test": "dotnet test API.sln -c Release",
+    "clean": "dotnet clean API.sln",
+    "openapi": "dotnet tool restore && dotnet build API.Furnistore.API/API.Furnistore.API.csproj -c Release && dotnet swagger tofile --output openapi.json API.Furnistore.API/bin/Release/net10.0/API.Furnistore.API.dll v1"
   }
 }

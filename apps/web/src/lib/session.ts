@@ -2,24 +2,22 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@/lib/session-constants";
+import { readActiveSessionClaims } from "@/lib/session-token";
+
+async function readSession() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const claims = readActiveSessionClaims(token);
+  return token && claims ? { token, claims } : null;
+}
 
 export async function getSession(): Promise<string | null> {
-  const store = await cookies();
-  return store.get(SESSION_COOKIE)?.value ?? null;
+  return (await readSession())?.token ?? null;
 }
 
 export async function getSessionUser(): Promise<{ email: string } | null> {
-  const token = await getSession();
-  if (!token) return null;
+  const session = await readSession();
+  if (!session) return null;
 
-  const payload = token.split(".")[1];
-  if (!payload) return null;
-
-  try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    const email = claims.email ?? claims.sub;
-    return typeof email === "string" ? { email } : null;
-  } catch {
-    return null;
-  }
+  const email = session.claims.email ?? session.claims.sub;
+  return typeof email === "string" ? { email } : null;
 }

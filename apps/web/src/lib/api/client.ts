@@ -16,9 +16,17 @@ function getBaseUrl(): string {
 function kindForStatus(status: number): AppErrorKind {
   if (status === 401 || status === 403) return "unauthorized";
   if (status === 404) return "notFound";
+  if (status === 409) return "conflict";
   if (status >= 500) return "server";
   if (status >= 400) return "validation";
   return "unexpected";
+}
+
+function extractCode(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+
+  const { code } = data as { code?: unknown };
+  return typeof code === "string" ? code : undefined;
 }
 
 function extractMessages(data: unknown): string[] {
@@ -54,12 +62,14 @@ function failure(
   cause?: unknown,
 ): { ok: false; error: AppError } {
   const status = error.status ? ` ${error.status}` : "";
-  console.error(`[api] ${method} ${path} → ${error.kind}${status}`, cause ?? error.messages);
+  const code = error.code ? ` ${error.code}` : "";
+  console.error(`[api] ${method} ${path} → ${error.kind}${status}${code}`, cause ?? error.messages);
   return err(error);
 }
 
-type ApiFetchInit = Omit<RequestInit, "body" | "signal"> & {
+export type ApiFetchInit = Omit<RequestInit, "body" | "signal" | "headers"> & {
   body?: unknown;
+  headers?: Record<string, string>;
   timeoutMs?: number;
 };
 
@@ -96,6 +106,7 @@ export async function apiFetch<T>(
       {
         kind: kindForStatus(response.status),
         status: response.status,
+        code: extractCode(data),
         messages: extractMessages(data),
       },
       method,

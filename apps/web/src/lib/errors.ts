@@ -3,6 +3,7 @@ export type AppErrorKind =
   | "timeout"
   | "unauthorized"
   | "notFound"
+  | "conflict"
   | "validation"
   | "server"
   | "unexpected";
@@ -10,6 +11,7 @@ export type AppErrorKind =
 export type AppError = {
   kind: AppErrorKind;
   status?: number;
+  code?: string;
   messages: string[];
 };
 
@@ -18,6 +20,7 @@ const USER_MESSAGES: Record<AppErrorKind, string> = {
   timeout: "El servidor tardó demasiado en responder. Intenta de nuevo.",
   unauthorized: "Tu sesión expiró. Vuelve a iniciar sesión.",
   notFound: "No encontramos lo que buscabas.",
+  conflict: "Los datos cambiaron mientras tanto. Revisa e intenta de nuevo.",
   validation: "Revisa los datos ingresados.",
   server: "El servidor tuvo un problema. Intenta de nuevo en un momento.",
   unexpected: "Ocurrió un error inesperado.",

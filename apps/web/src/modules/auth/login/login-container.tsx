@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { translateAuthError } from "@/modules/auth/error-messages";
 import { LoginForm } from "@/modules/auth/login/login-form";
 
-export function LoginContainer() {
+export function LoginContainer({ next }: { next: string }) {
   const router = useRouter();
   const [errors, setErrors] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
@@ -27,7 +27,7 @@ export function LoginContainer() {
     });
 
     if (res.ok) {
-      router.push("/");
+      router.push(next);
       router.refresh();
       return;
     }

@@ -23,7 +23,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Furnistore",
+  title: { default: "Furnistore", template: "%s · Furnistore" },
   description: "Catálogo de muebles hechos para durar.",
 };
 

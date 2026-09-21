@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ChairMark } from "@/components/furniture-marks";
 import { UserMenu } from "@/modules/auth/user-menu";
+import { CartBadge, CartLink } from "@/modules/cart/cart-badge";
 import { ProductSearchBar } from "@/modules/products/product-search-bar";
 
 export async function SiteHeader() {
@@ -30,6 +31,13 @@ export async function SiteHeader() {
 
         <div className="flex shrink-0 items-center gap-3">
           <ThemeToggle />
+          {user ? (
+            <Suspense fallback={<CartLink count={null} />}>
+              <CartBadge />
+            </Suspense>
+          ) : (
+            <CartLink count={null} />
+          )}
           {user ? (
             <UserMenu email={user.email} />
           ) : (

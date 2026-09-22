@@ -1,19 +1,21 @@
+using System.Net;
 using System.Text;
 using API.Furnistore.Application.Auth;
+using API.Furnistore.Application.Common;
+using API.Furnistore.API.Configuration;
 using API.Furnistore.API.Extensions;
 using API.Furnistore.API.Middleware;
 using API.Furnistore.API.Services;
 using API.Furnistore.Data;
 using dotenv.net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NLog;
 using NLog.Web;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 
 var logger = NLog.LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
 logger.Debug("init main");
@@ -47,6 +49,7 @@ try
                 overwriteExistingVars: false
             )
         );
+        builder.Configuration.AddEnvironmentVariables();
     }
 
     // Add services to the container.
@@ -60,8 +63,7 @@ try
     );
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
-    builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor,
-    Microsoft.AspNetCore.Mvc.Infrastructure.ActionContextAccessor>();
+    builder.Services.AddMemoryCache();
     builder.Services.AddApplicationServices();
     builder.Services.AddHealthChecks()
     .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
@@ -117,8 +119,24 @@ try
 
 
     // Email
-    builder.Services.Configure<API.Furnistore.API.Configuration.SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
-    builder.Services.AddSingleton<IEmailSender, EmailService>();
+    builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+    builder.Services
+        .AddOptions<PublicUrls>()
+        .Configure<IConfiguration>((urls, configuration) =>
+        {
+            urls.Api = configuration["Api:PublicUrl"] ?? string.Empty;
+            urls.Frontend = configuration["Frontend:PublicUrl"] ?? string.Empty;
+        })
+        .Validate(urls => urls.IsValid, "Configura Api:PublicUrl y Frontend:PublicUrl con URLs absolutas (http o https).")
+        .ValidateOnStart();
+
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+        var knownProxies = builder.Configuration["ForwardedHeaders:KnownProxies"] ?? string.Empty;
+        foreach (var proxy in knownProxies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            options.KnownProxies.Add(IPAddress.Parse(proxy));
+    });
 
     //JWT
     var key = Encoding.UTF8.GetBytes(jwtSecret); //Aqui se guarda el valor del secret jwt
@@ -143,20 +161,7 @@ try
     };
 
     
-    // Limita el numeor de intento que puede hacer el usario al equivocarse...
-    // O sea, que si se equivoca 5 veces tiene que esperar 1 minuto para poder hacer otros
-    // 5 intentos.
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.AddFixedWindowLimiter("auth", opt =>
-        {
-            opt.Window = TimeSpan.FromMinutes(1);
-            opt.PermitLimit = 5;
-            opt.QueueLimit = 0;
-        });
-
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    });
+    builder.Services.AddAuthRateLimiting();
 
     builder.Services.AddSingleton(tokenValidationParameters);
 
@@ -183,6 +188,9 @@ try
             options.Password.RequireLowercase = false;
             options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
         })
         // La Linea de abajo es para el tema de los roles en la pagina web.
         .AddRoles<IdentityRole>()
@@ -193,6 +201,13 @@ try
     builder.Host.UseNLog();
 
     var app = builder.Build();
+
+    var smtp = app.Services.GetRequiredService<IOptions<SmtpSettings>>().Value;
+    if (smtp.Security != MailKit.Security.SecureSocketOptions.None && !smtp.HasCredentials)
+        app.Logger.LogWarning(
+            ApiEvents.SmtpNotConfigured,
+            "SMTP sin credenciales: los correos de confirmación no se van a enviar. Define SmtpSettings__UserName y SmtpSettings__Password en apps/api/.env"
+        );
 
     // Esto es para la asignacion del rol.
     using (var scope = app.Services.CreateScope())
@@ -213,6 +228,7 @@ try
         app.UseSwaggerUI();
     }
 
+    app.UseForwardedHeaders();
     app.UseMiddleware<RequestLoggingMiddleware>();
     app.UseExceptionHandler();
 

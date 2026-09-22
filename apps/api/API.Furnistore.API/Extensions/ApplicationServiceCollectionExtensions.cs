@@ -19,8 +19,8 @@ namespace API.Furnistore.API.Extensions
             services.AddScoped<CartService>();
             services.AddScoped<AuthService>();
 
-            services.AddScoped<IVerificationEmailSender, IdentityVerificationEmailSender>();
-            services.AddScoped<IEmailConfirmationLinkBuilder, EmailConfirmationLinkBuilder>();
+            services.AddSingleton<IVerificationEmailSender, SmtpEmailSender>();
+            services.AddSingleton<IEmailConfirmationLinkBuilder, EmailConfirmationLinkBuilder>();
 
             return services;
         }

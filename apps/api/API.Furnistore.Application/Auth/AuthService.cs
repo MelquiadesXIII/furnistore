@@ -7,6 +7,7 @@ using API.Furnistore.Shared;
 using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
@@ -28,9 +29,12 @@ namespace API.Furnistore.Application.Auth
         TokenValidationParameters tokenValidationParameters,
         IVerificationEmailSender emailSender,
         IEmailConfirmationLinkBuilder linkBuilder,
+        IMemoryCache cache,
         ILogger<AuthService> logger
     )
     {
+        public static readonly TimeSpan ConfirmationEmailCooldown = TimeSpan.FromSeconds(60);
+
         public async Task<Result<RegisterResponse>> RegisterAsync(
             RegisterRequest request,
             CancellationToken cancellationToken
@@ -87,7 +91,7 @@ namespace API.Furnistore.Application.Auth
             if (!await userManager.IsInRoleAsync(user, "User"))
                 await userManager.AddToRoleAsync(user, "User");
             
-            var emailSent = await TrySendVerificationEmailAsync(user, cancellationToken);
+            var emailSent = await TrySendConfirmationEmailAsync(user, request.FirstName.Trim(), cancellationToken);
 
             return Result.Ok(new RegisterResponse(emailSent));
         }
@@ -102,6 +106,21 @@ namespace API.Furnistore.Application.Auth
 
             if (user is null)
                 return LoginFailure(email, "user_not_found");
+
+            if (await userManager.IsLockedOutAsync(user))
+                return LockedOut(user);
+
+            if (!await userManager.CheckPasswordAsync(user, request.Password))
+            {
+                await userManager.AccessFailedAsync(user);
+
+                return await userManager.IsLockedOutAsync(user)
+                    ? LockedOut(user)
+                    : LoginFailure(email, "bad_password");
+            }
+
+            if (user.AccessFailedCount > 0)
+                await userManager.ResetAccessFailedCountAsync(user);
 
             if (!user.EmailConfirmed)
             {
@@ -118,9 +137,6 @@ namespace API.Furnistore.Application.Auth
                     )
                 );
             }
-
-            if (!await userManager.CheckPasswordAsync(user, request.Password))
-                return LoginFailure(email, "bad_password");
 
             var tokens = await IssueTokensAsync(user, cancellationToken);
 
@@ -208,6 +224,46 @@ namespace API.Furnistore.Application.Auth
             );
 
             return Result.Ok(tokens);
+        }
+
+        public async Task<Result> ResendConfirmationAsync(
+            ResendConfirmationRequest request,
+            CancellationToken cancellationToken
+        )
+        {
+            var email = request.Email.Trim();
+            var user = await userManager.FindByEmailAsync(email);
+
+            if (user is null || user.EmailConfirmed)
+            {
+                logger.LogInformation(
+                    ApiEvents.ConfirmationEmailSkipped,
+                    "Confirmation resend skipped for {EmailMasked}: {Reason}",
+                    Mask(email),
+                    user is null ? "unknown_email" : "already_confirmed"
+                );
+                return Result.Ok();
+            }
+
+            if (cache.TryGetValue(CooldownKey(user.Id), out _))
+            {
+                logger.LogInformation(
+                    ApiEvents.ConfirmationEmailSkipped,
+                    "Confirmation resend skipped for {UserId}: {Reason}",
+                    user.Id,
+                    "cooldown"
+                );
+                return Result.Ok();
+            }
+
+            var firstName = await db
+                .Clients.Where(c => c.UserId == user.Id)
+                .Select(c => c.FirstName)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            await TrySendConfirmationEmailAsync(user, firstName ?? string.Empty, cancellationToken);
+
+            return Result.Ok();
         }
 
         public async Task<Result> ConfirmEmailAsync(
@@ -320,8 +376,9 @@ namespace API.Furnistore.Application.Auth
             return new AuthTokensResponse(jwtToken, rawRefreshToken);
         }
 
-        private async Task<bool> TrySendVerificationEmailAsync(
+        private async Task<bool> TrySendConfirmationEmailAsync(
             IdentityUser user,
+            string firstName,
             CancellationToken cancellationToken
         )
         {
@@ -332,10 +389,15 @@ namespace API.Furnistore.Application.Auth
                 var link = linkBuilder.Build(user.Id, code);
 
                 await emailSender.SendAsync(
-                    user.Email!,
-                    "Confirma tu correo",
-                    $"Confirma tu cuenta <a href=\"{link}\">haciendo clic aquí</a>.",
+                    AuthEmails.EmailConfirmation(user.Email!, firstName, link),
                     cancellationToken
+                );
+
+                cache.Set(CooldownKey(user.Id), true, ConfirmationEmailCooldown);
+                logger.LogInformation(
+                    ApiEvents.ConfirmationEmailSent,
+                    "Confirmation email sent for {UserId}",
+                    user.Id
                 );
 
                 return true;
@@ -345,12 +407,26 @@ namespace API.Furnistore.Application.Auth
                 logger.LogError(
                     ApiEvents.EmailSendFailed,
                     ex,
-                    "Verification email could not be sent for {UserId}",
+                    "Confirmation email could not be sent for {UserId}",
                     user.Id
                 );
                 return false;
             }
         }
+
+        private Result<AuthTokensResponse> LockedOut(IdentityUser user)
+        {
+            logger.LogWarning(ApiEvents.LoginLockedOut, "Login rejected for {UserId}: locked out", user.Id);
+
+            return Result.Fail<AuthTokensResponse>(
+                Error.TooManyRequests(
+                    "auth.locked_out",
+                    "Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo."
+                )
+            );
+        }
+
+        private static string CooldownKey(string userId) => $"auth:confirmation-email:{userId}";
 
         private Result<AuthTokensResponse> LoginFailure(string email, string reason)
         {

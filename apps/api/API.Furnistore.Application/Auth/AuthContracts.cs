@@ -27,6 +27,12 @@ namespace API.Furnistore.Application.Auth
         public required string Password { get; init; }
     }
 
+    public sealed record ResendConfirmationRequest
+    {
+        [Required, EmailAddress, StringLength(256)]
+        public required string Email { get; init; }
+    }
+
     public sealed record RefreshTokenRequest
     {
         [Required]

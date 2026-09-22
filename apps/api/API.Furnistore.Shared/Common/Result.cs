@@ -7,6 +7,7 @@ namespace API.Furnistore.Shared.Common
         Conflict,
         Unauthorized,
         Forbidden,
+        TooManyRequests,
         Unexpected,
     }
 
@@ -26,6 +27,9 @@ namespace API.Furnistore.Shared.Common
 
         public static Error Forbidden(string code, string message) =>
             new(code, message, ErrorType.Forbidden);
+
+        public static Error TooManyRequests(string code, string message) =>
+            new(code, message, ErrorType.TooManyRequests);
 
         public static Error Unexpected(string code, string message) =>
             new(code, message, ErrorType.Unexpected);

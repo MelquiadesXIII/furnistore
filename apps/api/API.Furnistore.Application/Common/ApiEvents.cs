@@ -34,7 +34,10 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId RegistrationRejected = new(2011, nameof(RegistrationRejected));
         public static readonly EventId RefreshTokenRejected = new(2012, nameof(RefreshTokenRejected));
         public static readonly EventId EmailConfirmationFailed = new(2013, nameof(EmailConfirmationFailed));
+        public static readonly EventId LoginLockedOut = new(2014, nameof(LoginLockedOut));
         public static readonly EventId EmailSendFailed = new(2020, nameof(EmailSendFailed));
+        public static readonly EventId ConfirmationEmailSent = new(2021, nameof(ConfirmationEmailSent));
+        public static readonly EventId ConfirmationEmailSkipped = new(2022, nameof(ConfirmationEmailSkipped));
 
         public static readonly EventId CheckoutCompleted = new(3004, nameof(CheckoutCompleted));
         public static readonly EventId OrderShipped = new(3005, nameof(OrderShipped));
@@ -50,6 +53,8 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId EndpointsRegistered = new(5004, nameof(EndpointsRegistered));
         public static readonly EventId DatabaseWarmedUp = new(5005, nameof(DatabaseWarmedUp));
         public static readonly EventId DatabaseWarmupFailed = new(5006, nameof(DatabaseWarmupFailed));
+        public static readonly EventId SmtpNotConfigured = new(5007, nameof(SmtpNotConfigured));
+        public static readonly EventId RequestRateLimited = new(5008, nameof(RequestRateLimited));
         public static readonly EventId LogoutSucceeded = new(2005, nameof(LogoutSucceeded));
     }
 }

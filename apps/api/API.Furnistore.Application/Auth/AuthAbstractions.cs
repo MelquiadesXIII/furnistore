@@ -1,8 +1,10 @@
 namespace API.Furnistore.Application.Auth
 {
+    public sealed record EmailMessage(string To, string Subject, string HtmlBody, string TextBody);
+
     public interface IVerificationEmailSender
     {
-        Task SendAsync(string email, string subject, string htmlBody, CancellationToken cancellationToken);
+        Task SendAsync(EmailMessage message, CancellationToken cancellationToken);
     }
 
     public interface IEmailConfirmationLinkBuilder

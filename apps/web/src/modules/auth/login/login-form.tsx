@@ -1,16 +1,18 @@
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm({
   pending,
-  errors,
+  error,
   onSubmit,
+  children,
 }: {
   pending: boolean;
-  errors: string[];
+  error: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  children?: ReactNode;
 }) {
   return (
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
@@ -42,17 +44,17 @@ export function LoginForm({
         />
       </div>
 
-      {errors.length > 0 && (
-        <ul className="flex flex-col gap-1 text-sm text-brick" role="alert">
-          {errors.map((err) => (
-            <li key={err}>{err}</li>
-          ))}
-        </ul>
+      {error && (
+        <p className="text-sm text-brick" role="alert">
+          {error}
+        </p>
       )}
 
       <Button type="submit" disabled={pending} className="mt-2 w-full">
         {pending ? "Entrando…" : "Entrar"}
       </Button>
+
+      {children}
     </form>
   );
 }

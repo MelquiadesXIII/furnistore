@@ -1,21 +1,29 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { translateAuthError } from "@/modules/auth/error-messages";
+import { CheckEmail } from "@/modules/auth/register/check-email";
 import { RegisterForm } from "@/modules/auth/register/register-form";
+import type { AuthFailure } from "@/modules/auth/types";
+
+const UNREACHABLE: AuthFailure = {
+  code: null,
+  message: "No se pudo conectar con el servidor. Intenta de nuevo en un momento.",
+};
+
+type Registered = { email: string; emailSent: boolean };
 
 export function RegisterContainer() {
-  const router = useRouter();
-  const [errors, setErrors] = useState<string[]>([]);
+  const [failure, setFailure] = useState<AuthFailure | null>(null);
+  const [registered, setRegistered] = useState<Registered | null>(null);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    setErrors([]);
+    setFailure(null);
 
     const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("emailAddress") ?? "").trim();
 
     const res = await fetch("/api/auth/register", {
       method: "POST",
@@ -23,21 +31,25 @@ export function RegisterContainer() {
       body: JSON.stringify({
         firstName: formData.get("firstName"),
         lastName: formData.get("lastName"),
-        emailAddress: formData.get("emailAddress"),
+        emailAddress: email,
         password: formData.get("password"),
       }),
-    });
+    }).catch(() => null);
 
-    if (res.ok) {
-      router.push("/");
-      router.refresh();
+    const data = await res?.json().catch(() => null);
+
+    if (res?.ok) {
+      setRegistered({ email, emailSent: Boolean(data?.emailSent) });
       return;
     }
 
-    const data = await res.json().catch(() => ({ errors: ["Ocurrió un error inesperado."] }));
-    setErrors((data.errors ?? []).map(translateAuthError));
+    setFailure(data?.error ?? UNREACHABLE);
     setPending(false);
   }
 
-  return <RegisterForm pending={pending} errors={errors} onSubmit={handleSubmit} />;
+  if (registered) {
+    return <CheckEmail email={registered.email} emailSent={registered.emailSent} />;
+  }
+
+  return <RegisterForm pending={pending} error={failure?.message ?? null} onSubmit={handleSubmit} />;
 }

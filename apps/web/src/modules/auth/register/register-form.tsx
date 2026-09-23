@@ -5,11 +5,11 @@ import { Label } from "@/components/ui/label";
 
 export function RegisterForm({
   pending,
-  errors,
+  error,
   onSubmit,
 }: {
   pending: boolean;
-  errors: string[];
+  error: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -72,18 +72,18 @@ export function RegisterForm({
           type="password"
           required
           minLength={8}
+          pattern=".*\d.*"
+          title="Incluye al menos un número."
           autoComplete="new-password"
           className="bg-surface-raised"
         />
-        <p className="text-xs text-ink-muted">Mínimo 8 caracteres.</p>
+        <p className="text-xs text-ink-muted">Mínimo 8 caracteres, con al menos un número.</p>
       </div>
 
-      {errors.length > 0 && (
-        <ul className="flex flex-col gap-1 text-sm text-brick" role="alert">
-          {errors.map((err) => (
-            <li key={err}>{err}</li>
-          ))}
-        </ul>
+      {error && (
+        <p className="text-sm text-brick" role="alert">
+          {error}
+        </p>
       )}
 
       <Button type="submit" disabled={pending} className="mt-2 w-full">

@@ -17,6 +17,7 @@ function kindForStatus(status: number): AppErrorKind {
   if (status === 401 || status === 403) return "unauthorized";
   if (status === 404) return "notFound";
   if (status === 409) return "conflict";
+  if (status === 429) return "rateLimited";
   if (status >= 500) return "server";
   if (status >= 400) return "validation";
   return "unexpected";

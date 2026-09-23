@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
-import { toUserMessage } from "@/lib/errors";
+import { clientIpFrom } from "@/lib/api/client-ip";
 import { register } from "@/modules/auth/api";
+import { toAuthFailure } from "@/modules/auth/error-messages";
 
 export async function POST(request: Request) {
-  const { firstName, lastName, emailAddress, password } = await request.json();
+  const { firstName, lastName, emailAddress, password } = await request.json().catch(() => ({}));
 
-  const result = await register({ firstName, lastName, emailAddress, password });
+  const result = await register(
+    { firstName, lastName, emailAddress, password },
+    clientIpFrom(request.headers),
+  );
 
   if (!result.ok) {
-    const { error } = result;
     return NextResponse.json(
-      { errors: error.messages.length > 0 ? error.messages : [toUserMessage(error)] },
-      { status: error.status ?? 502 },
+      { error: toAuthFailure(result.error) },
+      { status: result.error.status ?? 502 },
     );
   }
 

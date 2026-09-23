@@ -4,6 +4,7 @@ export type AppErrorKind =
   | "unauthorized"
   | "notFound"
   | "conflict"
+  | "rateLimited"
   | "validation"
   | "server"
   | "unexpected";
@@ -21,6 +22,7 @@ const USER_MESSAGES: Record<AppErrorKind, string> = {
   unauthorized: "Tu sesión expiró. Vuelve a iniciar sesión.",
   notFound: "No encontramos lo que buscabas.",
   conflict: "Los datos cambiaron mientras tanto. Revisa e intenta de nuevo.",
+  rateLimited: "Demasiados intentos. Espera un momento e intenta de nuevo.",
   validation: "Revisa los datos ingresados.",
   server: "El servidor tuvo un problema. Intenta de nuevo en un momento.",
   unexpected: "Ocurrió un error inesperado.",

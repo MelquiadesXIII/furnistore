@@ -22,6 +22,8 @@ namespace API.Furnistore.Data
 
         public DbSet<CartItem> CartItems { get; set; }
 
+        public DbSet<EmailVerificationCode> EmailVerificationCodes { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

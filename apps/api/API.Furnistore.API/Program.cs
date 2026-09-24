@@ -63,7 +63,6 @@ try
     );
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
-    builder.Services.AddMemoryCache();
     builder.Services.AddApplicationServices();
     builder.Services.AddHealthChecks()
     .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
@@ -120,16 +119,6 @@ try
 
     // Email
     builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
-    builder.Services
-        .AddOptions<PublicUrls>()
-        .Configure<IConfiguration>((urls, configuration) =>
-        {
-            urls.Api = configuration["Api:PublicUrl"] ?? string.Empty;
-            urls.Frontend = configuration["Frontend:PublicUrl"] ?? string.Empty;
-        })
-        .Validate(urls => urls.IsValid, "Configura Api:PublicUrl y Frontend:PublicUrl con URLs absolutas (http o https).")
-        .ValidateOnStart();
-
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;

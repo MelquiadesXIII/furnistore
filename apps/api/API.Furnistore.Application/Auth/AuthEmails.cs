@@ -7,10 +7,10 @@ namespace API.Furnistore.Application.Auth
     {
         private static readonly HtmlEncoder Html = HtmlEncoder.Create(UnicodeRanges.All);
 
-        public static EmailMessage EmailConfirmation(string to, string firstName, string link)
+        public static EmailMessage VerificationCode(string to, string firstName, string code, TimeSpan lifetime)
         {
             var name = Html.Encode(firstName);
-            var href = Html.Encode(link);
+            var minutes = (int)lifetime.TotalMinutes;
 
             var html = $"""
                 <!doctype html>
@@ -24,13 +24,10 @@ namespace API.Furnistore.Application.Auth
                               <td>
                                 <p style="margin:0 0 24px;font-size:20px;font-weight:bold;">Furnistore</p>
                                 <p style="margin:0 0 16px;font-size:16px;">Hola {name}:</p>
-                                <p style="margin:0 0 24px;font-size:16px;line-height:1.5;">Gracias por crear tu cuenta. Confirma tu correo para empezar a comprar.</p>
-                                <p style="margin:0 0 24px;">
-                                  <a href="{href}" style="display:inline-block;background:#8f6526;color:#ffffff;text-decoration:none;font-size:16px;padding:12px 24px;border-radius:4px;">Confirmar mi correo</a>
-                                </p>
-                                <p style="margin:0 0 8px;font-size:13px;color:#6b6255;">Si el botón no funciona, copia este enlace en tu navegador:</p>
-                                <p style="margin:0 0 24px;font-size:13px;word-break:break-all;"><a href="{href}" style="color:#8f6526;">{href}</a></p>
-                                <p style="margin:0;font-size:13px;color:#6b6255;">Si no creaste esta cuenta, ignora este mensaje.</p>
+                                <p style="margin:0 0 24px;font-size:16px;line-height:1.5;">Usa este código para confirmar tu correo y empezar a comprar:</p>
+                                <p style="margin:0 0 24px;font-size:36px;font-weight:bold;letter-spacing:8px;font-family:'Courier New',monospace;color:#8f6526;">{code}</p>
+                                <p style="margin:0 0 8px;font-size:13px;color:#6b6255;">El código vence en {minutes} minutos.</p>
+                                <p style="margin:0;font-size:13px;color:#6b6255;">Si no creaste esta cuenta, ignora este mensaje. Nunca compartas este código.</p>
                               </td>
                             </tr>
                           </table>
@@ -44,14 +41,12 @@ namespace API.Furnistore.Application.Auth
             var text = $"""
                 Hola {firstName}:
 
-                Gracias por crear tu cuenta en Furnistore. Confirma tu correo abriendo este enlace:
+                Tu código para confirmar tu correo en Furnistore es: {code}
 
-                {link}
-
-                Si no creaste esta cuenta, ignora este mensaje.
+                Vence en {minutes} minutos. Si no creaste esta cuenta, ignora este mensaje. Nunca compartas este código.
                 """;
 
-            return new EmailMessage(to, "Confirma tu correo en Furnistore", html, text);
+            return new EmailMessage(to, $"Tu código de Furnistore: {code}", html, text);
         }
     }
 }

@@ -27,6 +27,16 @@ namespace API.Furnistore.Application.Auth
         public required string Password { get; init; }
     }
 
+    public sealed record VerifyEmailRequest
+    {
+        [Required, EmailAddress, StringLength(256)]
+        public required string Email { get; init; }
+
+        [Required, StringLength(6, MinimumLength = 6)]
+        [RegularExpression(@"^\d{6}$", ErrorMessage = "El código debe tener 6 dígitos.")]
+        public required string Code { get; init; }
+    }
+
     public sealed record ResendConfirmationRequest
     {
         [Required, EmailAddress, StringLength(256)]

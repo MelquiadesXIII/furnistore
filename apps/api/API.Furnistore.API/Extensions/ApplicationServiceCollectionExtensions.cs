@@ -20,7 +20,7 @@ namespace API.Furnistore.API.Extensions
             services.AddScoped<AuthService>();
 
             services.AddSingleton<IVerificationEmailSender, SmtpEmailSender>();
-            services.AddSingleton<IEmailConfirmationLinkBuilder, EmailConfirmationLinkBuilder>();
+            services.AddSingleton(TimeProvider.System);
 
             return services;
         }

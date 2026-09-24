@@ -6,9 +6,4 @@ namespace API.Furnistore.Application.Auth
     {
         Task SendAsync(EmailMessage message, CancellationToken cancellationToken);
     }
-
-    public interface IEmailConfirmationLinkBuilder
-    {
-        string Build(string userId, string code);
-    }
 }

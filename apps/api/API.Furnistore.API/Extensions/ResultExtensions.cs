@@ -12,7 +12,7 @@ namespace API.Furnistore.API.Extensions
         public static IActionResult ToNoContentResult(this Result result, ControllerBase controller) =>
             result.IsSuccess ? controller.NoContent() : Problem(result.Error!, controller);
 
-        public static IActionResult Problem(Error error, ControllerBase controller) =>
+        private static IActionResult Problem(Error error, ControllerBase controller) =>
             controller.Problem(
                 title: error.Message,
                 statusCode: StatusFor(error.Type),

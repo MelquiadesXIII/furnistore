@@ -7,7 +7,6 @@ using API.Furnistore.Shared;
 using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
@@ -28,12 +27,11 @@ namespace API.Furnistore.Application.Auth
         JwtOptions jwt,
         TokenValidationParameters tokenValidationParameters,
         IVerificationEmailSender emailSender,
-        IEmailConfirmationLinkBuilder linkBuilder,
-        IMemoryCache cache,
+        TimeProvider clock,
         ILogger<AuthService> logger
     )
     {
-        public static readonly TimeSpan ConfirmationEmailCooldown = TimeSpan.FromSeconds(60);
+        public static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
 
         public async Task<Result<RegisterResponse>> RegisterAsync(
             RegisterRequest request,
@@ -91,7 +89,7 @@ namespace API.Furnistore.Application.Auth
             if (!await userManager.IsInRoleAsync(user, "User"))
                 await userManager.AddToRoleAsync(user, "User");
             
-            var emailSent = await TrySendConfirmationEmailAsync(user, request.FirstName.Trim(), cancellationToken);
+            var emailSent = await TrySendVerificationCodeAsync(user, request.FirstName.Trim(), cancellationToken);
 
             return Result.Ok(new RegisterResponse(emailSent));
         }
@@ -238,18 +236,24 @@ namespace API.Furnistore.Application.Auth
             {
                 logger.LogInformation(
                     ApiEvents.ConfirmationEmailSkipped,
-                    "Confirmation resend skipped for {EmailMasked}: {Reason}",
+                    "Verification code resend skipped for {EmailMasked}: {Reason}",
                     Mask(email),
                     user is null ? "unknown_email" : "already_confirmed"
                 );
                 return Result.Ok();
             }
 
-            if (cache.TryGetValue(CooldownKey(user.Id), out _))
+            var now = clock.GetUtcNow().UtcDateTime;
+            var coolingDown = await db.EmailVerificationCodes.AnyAsync(
+                c => c.UserId == user.Id && c.CreatedAt > now - ResendCooldown,
+                cancellationToken
+            );
+
+            if (coolingDown)
             {
                 logger.LogInformation(
                     ApiEvents.ConfirmationEmailSkipped,
-                    "Confirmation resend skipped for {UserId}: {Reason}",
+                    "Verification code resend skipped for {UserId}: {Reason}",
                     user.Id,
                     "cooldown"
                 );
@@ -261,56 +265,72 @@ namespace API.Furnistore.Application.Auth
                 .Select(c => c.FirstName)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            await TrySendConfirmationEmailAsync(user, firstName ?? string.Empty, cancellationToken);
+            await TrySendVerificationCodeAsync(user, firstName ?? string.Empty, cancellationToken);
 
             return Result.Ok();
         }
 
-        public async Task<Result> ConfirmEmailAsync(
-            string userId,
-            string code,
+        public async Task<Result> VerifyEmailAsync(
+            VerifyEmailRequest request,
             CancellationToken cancellationToken
         )
         {
-            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(code))
-                return Result.Fail(
-                    Error.Validation("auth.invalid_confirmation_url", "El enlace de confirmación no es válido.")
+            var email = request.Email.Trim();
+            var user = await userManager.FindByEmailAsync(email);
+
+            var stored = user is null
+                ? null
+                : await db.EmailVerificationCodes.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == user.Id, cancellationToken);
+
+            if (user is null || stored is null || stored.ExpiresAt <= clock.GetUtcNow().UtcDateTime)
+                return VerificationFailure(user?.Id, "code_expired", Error.Validation(
+                    "auth.code_expired",
+                    "El código venció o no existe. Pide uno nuevo."
+                ));
+
+            var attemptReserved = await db
+                .EmailVerificationCodes.Where(c => c.Id == stored.Id && c.FailedAttempts < VerificationCodes.MaxAttempts)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(c => c.FailedAttempts, c => c.FailedAttempts + 1),
+                    cancellationToken
                 );
 
-            var user = await userManager.FindByIdAsync(userId);
+            if (attemptReserved == 0)
+                return await TooManyCodeAttemptsAsync(user, stored.Id, cancellationToken);
 
-            if (user is null)
-                return Result.Fail(
-                    Error.NotFound("auth.user_not_found", "El enlace de confirmación no es válido.")
-                );
+            var submitted = VerificationCodes.Hash(jwt.Secret, user.Id, request.Code);
 
-            string decoded;
-            try
+            if (!VerificationCodes.Matches(stored.CodeHash, submitted))
             {
-                decoded = Encoding.UTF8.GetString(Base64UrlEncoder.DecodeBytes(code));
-            }
-            catch (FormatException)
-            {
-                return Result.Fail(
-                    Error.Validation("auth.invalid_confirmation_code", "El enlace de confirmación no es válido.")
-                );
-            }
+                if (stored.FailedAttempts + 1 >= VerificationCodes.MaxAttempts)
+                    return await TooManyCodeAttemptsAsync(user, stored.Id, cancellationToken);
 
-            var result = await userManager.ConfirmEmailAsync(user, decoded);
-
-            if (!result.Succeeded)
-            {
-                logger.LogWarning(
-                    ApiEvents.EmailConfirmationFailed,
-                    "Email confirmation failed for {UserId}",
-                    userId
-                );
-                return Result.Fail(
-                    Error.Validation("auth.confirmation_failed", "No se pudo confirmar el correo.")
-                );
+                return VerificationFailure(user.Id, "code_invalid", Error.Validation(
+                    "auth.code_invalid",
+                    "Código incorrecto. Revisa el correo e intenta de nuevo."
+                ));
             }
 
-            logger.LogInformation(ApiEvents.EmailConfirmed, "Email confirmed for {UserId}", userId);
+            await db.EmailVerificationCodes.Where(c => c.UserId == user.Id).ExecuteDeleteAsync(cancellationToken);
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                var updated = await userManager.UpdateAsync(user);
+
+                if (!updated.Succeeded)
+                {
+                    logger.LogError(
+                        ApiEvents.EmailConfirmationFailed,
+                        "Email confirmation could not be saved for {UserId}: {Errors}",
+                        user.Id,
+                        string.Join("; ", updated.Errors.Select(e => e.Code))
+                    );
+                    return Result.Fail(Error.Unexpected("auth.confirmation_failed", "No se pudo confirmar el correo."));
+                }
+            }
+
+            logger.LogInformation(ApiEvents.EmailConfirmed, "Email confirmed for {UserId}", user.Id);
 
             return Result.Ok();
         }
@@ -376,27 +396,51 @@ namespace API.Furnistore.Application.Auth
             return new AuthTokensResponse(jwtToken, rawRefreshToken);
         }
 
-        private async Task<bool> TrySendConfirmationEmailAsync(
+        private async Task<bool> TrySendVerificationCodeAsync(
             IdentityUser user,
             string firstName,
             CancellationToken cancellationToken
         )
         {
+            var code = VerificationCodes.Generate();
+            var now = clock.GetUtcNow().UtcDateTime;
+
             try
             {
-                var rawCode = await userManager.GenerateEmailConfirmationTokenAsync(user);
-                var code = Base64UrlEncoder.Encode(Encoding.UTF8.GetBytes(rawCode));
-                var link = linkBuilder.Build(user.Id, code);
+                await db.EmailVerificationCodes.Where(c => c.UserId == user.Id).ExecuteDeleteAsync(cancellationToken);
+                db.EmailVerificationCodes.Add(
+                    new EmailVerificationCode
+                    {
+                        UserId = user.Id,
+                        CodeHash = VerificationCodes.Hash(jwt.Secret, user.Id, code),
+                        CreatedAt = now,
+                        ExpiresAt = now + VerificationCodes.Lifetime,
+                    }
+                );
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                db.ChangeTracker.Clear();
+                logger.LogInformation(
+                    ApiEvents.ConfirmationEmailSkipped,
+                    "Verification code skipped for {UserId}: {Reason}",
+                    user.Id,
+                    "concurrent_request"
+                );
+                return false;
+            }
 
+            try
+            {
                 await emailSender.SendAsync(
-                    AuthEmails.EmailConfirmation(user.Email!, firstName, link),
+                    AuthEmails.VerificationCode(user.Email!, firstName, code, VerificationCodes.Lifetime),
                     cancellationToken
                 );
 
-                cache.Set(CooldownKey(user.Id), true, ConfirmationEmailCooldown);
                 logger.LogInformation(
                     ApiEvents.ConfirmationEmailSent,
-                    "Confirmation email sent for {UserId}",
+                    "Verification code sent for {UserId}",
                     user.Id
                 );
 
@@ -404,14 +448,36 @@ namespace API.Furnistore.Application.Auth
             }
             catch (Exception ex)
             {
+                await db.EmailVerificationCodes.Where(c => c.UserId == user.Id).ExecuteDeleteAsync(CancellationToken.None);
                 logger.LogError(
                     ApiEvents.EmailSendFailed,
                     ex,
-                    "Confirmation email could not be sent for {UserId}",
+                    "Verification code email could not be sent for {UserId}",
                     user.Id
                 );
                 return false;
             }
+        }
+
+        private async Task<Result> TooManyCodeAttemptsAsync(IdentityUser user, int codeId, CancellationToken cancellationToken)
+        {
+            await db.EmailVerificationCodes.Where(c => c.Id == codeId).ExecuteDeleteAsync(cancellationToken);
+
+            return VerificationFailure(user.Id, "attempts_exceeded", Error.TooManyRequests(
+                "auth.code_attempts_exceeded",
+                "Demasiados intentos. Pide un código nuevo."
+            ));
+        }
+
+        private Result VerificationFailure(string? userId, string reason, Error error)
+        {
+            logger.LogWarning(
+                ApiEvents.EmailConfirmationFailed,
+                "Email verification rejected for {UserId}: {Reason}",
+                userId ?? "unknown",
+                reason
+            );
+            return Result.Fail(error);
         }
 
         private Result<AuthTokensResponse> LockedOut(IdentityUser user)
@@ -425,8 +491,6 @@ namespace API.Furnistore.Application.Auth
                 )
             );
         }
-
-        private static string CooldownKey(string userId) => $"auth:confirmation-email:{userId}";
 
         private Result<AuthTokensResponse> LoginFailure(string email, string reason)
         {

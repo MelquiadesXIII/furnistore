@@ -11,10 +11,21 @@ namespace API.Furnistore.Application.Orders
     {
         public async Task<Result<PagedResult<OrderResponse>>> SearchAsync(
             OrderQuery query,
+            string userId,
+            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
             var orders = db.Orders.AsNoTracking();
+
+            if (!isAdmin)
+            {
+                var ownerClientId = await GetClientIdAsync(userId, cancellationToken);
+                if (ownerClientId is null)
+                    return Result.Ok(new PagedResult<OrderResponse>([], 0, query.Page, query.PageSize));
+
+                orders = orders.Where(o => o.ClientId == ownerClientId);
+            }
 
             if (query.ClientId is int clientId)
                 orders = orders.Where(o => o.ClientId == clientId);
@@ -41,12 +52,15 @@ namespace API.Furnistore.Application.Orders
 
         public async Task<Result<OrderResponse>> GetByIdAsync(
             int id,
+            string userId,
+            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
             var order = await db
                 .Orders.AsNoTracking()
                 .Where(o => o.Id == id)
+                .Where(o => isAdmin || db.Clients.Any(c => c.ID == o.ClientId && c.UserId == userId))
                 .Select(o => new OrderResponse(
                     o.Id,
                     o.OrderNumber,
@@ -66,11 +80,21 @@ namespace API.Furnistore.Application.Orders
         public async Task<Result<OrderResponse>> CreateAsync(
             CreateOrderRequest request,
             string userId,
+            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
+            var clientId = isAdmin
+                ? request.ClientId
+                : await GetClientIdAsync(userId, cancellationToken);
+
+            if (clientId is null)
+                return Result.Fail<OrderResponse>(
+                    Error.Forbidden("order.client_not_owned", "La cuenta no tiene un cliente asociado.")
+                );
+
             var referenceError = await ValidateReferencesAsync(
-                request.ClientId,
+                clientId.Value,
                 request.Lines,
                 cancellationToken
             );
@@ -80,7 +104,7 @@ namespace API.Furnistore.Application.Orders
             var order = new Order
             {
                 OrderNumber = request.OrderNumber,
-                ClientId = request.ClientId,
+                ClientId = clientId.Value,
                 OrderDate = DateTime.SpecifyKind(request.OrderDate, DateTimeKind.Utc),
                 DeliveryDate = DateTime.SpecifyKind(request.DeliveryDate, DateTimeKind.Utc),
                 OrderDetails = request
@@ -120,6 +144,7 @@ namespace API.Furnistore.Application.Orders
             int id,
             UpdateOrderRequest request,
             string userId,
+            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
@@ -130,8 +155,17 @@ namespace API.Furnistore.Application.Orders
             if (order is null)
                 return Result.Fail(NotFound(id));
 
+            if (!isAdmin && !await IsOwnedByAsync(order.ClientId, userId, cancellationToken))
+                return Result.Fail(Error.Forbidden("order.not_owned", "No puedes modificar esta orden."));
+
+            var clientId = isAdmin
+                ? request.ClientId
+                : await GetClientIdAsync(userId, cancellationToken);
+            if (clientId is null)
+                return Result.Fail(Error.Forbidden("order.client_not_owned", "La cuenta no tiene un cliente asociado."));
+
             var referenceError = await ValidateReferencesAsync(
-                request.ClientId,
+                clientId.Value,
                 request.Lines,
                 cancellationToken
             );
@@ -139,7 +173,7 @@ namespace API.Furnistore.Application.Orders
                 return Result.Fail(referenceError);
 
             order.OrderNumber = request.OrderNumber;
-            order.ClientId = request.ClientId;
+            order.ClientId = clientId.Value;
             order.OrderDate = DateTime.SpecifyKind(request.OrderDate, DateTimeKind.Utc);
             order.DeliveryDate = DateTime.SpecifyKind(request.DeliveryDate, DateTimeKind.Utc);
 
@@ -168,6 +202,7 @@ namespace API.Furnistore.Application.Orders
         public async Task<Result> DeleteAsync(
             int id,
             string userId,
+            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
@@ -177,6 +212,9 @@ namespace API.Furnistore.Application.Orders
 
             if (order is null)
                 return Result.Fail(NotFound(id));
+
+            if (!isAdmin && !await IsOwnedByAsync(order.ClientId, userId, cancellationToken))
+                return Result.Fail(Error.Forbidden("order.not_owned", "No puedes eliminar esta orden."));
 
             db.OrderDetails.RemoveRange(order.OrderDetails);
             db.Orders.Remove(order);
@@ -191,6 +229,22 @@ namespace API.Furnistore.Application.Orders
 
             return Result.Ok();
         }
+
+        private Task<int?> GetClientIdAsync(string userId, CancellationToken cancellationToken) =>
+            db.Clients
+                .Where(client => client.UserId == userId)
+                .Select(client => (int?)client.ID)
+                .SingleOrDefaultAsync(cancellationToken);
+
+        private Task<bool> IsOwnedByAsync(
+            int clientId,
+            string userId,
+            CancellationToken cancellationToken
+        ) =>
+            db.Clients.AnyAsync(
+                client => client.ID == clientId && client.UserId == userId,
+                cancellationToken
+            );
 
         private async Task<Error?> ValidateReferencesAsync(
             int clientId,

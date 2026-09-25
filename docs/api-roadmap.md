@@ -4,13 +4,13 @@ Análisis del estado de `apps/api` frente a lo que necesita una tienda online re
 
 Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y a [`api-architecture.md`](./api-architecture.md), que explica **cómo está construida y por qué**. Este documento apunta a lo que **debería** hacer.
 
-> **Actualizado: 2026-09-25.** Desde la revisión anterior se mergeó la rama `Roles` (PR #5): rol `Admin`, seed de roles al arranque, claims de rol en el JWT, CORS, `/health` y rate limiting en Auth. Cada afirmación de este documento se verificó leyendo el código actual y, en los puntos críticos, arrancando la API y mirando el log real — no se repite nada de la versión anterior sin comprobarlo de nuevo.
+> **Actualizado: 2026-09-25.** Desde la revisión anterior se mergeó la rama `Roles` (PR #5) y se implementó la asociación `Client.UserId` con Identity: rol `Admin`, seed de roles al arranque, claims de rol en el JWT, CORS, `/health`, rate limiting en Auth y autorización por propietario en órdenes. La solución compila con `dotnet build apps/api/API.sln -v minimal` (0 advertencias, 0 errores). Este documento sigue describiendo el estado del roadmap completo, no un cierre de todo el negocio.
 
 ---
 
 ## 0. Estado general
 
-Hay progreso real: el hueco de autorización más ancho que existía — cualquier cuenta administraba el catálogo entero — está cerrado. `Program.cs` ya tiene `.AddRoles<IdentityRole>()`, siembra `Admin`/`User` al arrancar, y `IssueTokensAsync` mete cada rol del usuario como claim en el JWT. Verificado en vivo:
+Hay progreso real: el hueco de autorización más ancho que existía — cualquier cuenta administraba el catálogo entero — está cerrado. `Program.cs` ya tiene `.AddRoles<IdentityRole>()`, siembra `Admin`/`User` al arrancar, y `IssueTokensAsync` mete cada rol del usuario como claim en el JWT. Además, `Client.UserId` ya tiene FK e índice único hacia `AspNetUsers.Id`, y cada registro nuevo crea un cliente asociado. Verificado en código y compilación:
 
 ```
 POST   /api/products                              Admin
@@ -18,7 +18,7 @@ POST   /api/clients                                Admin
 POST   /api/product-categories                     Admin
 ```
 
-Pero el problema de fondo no era "falta el rol Admin" — era, y sigue siendo, que **ningún endpoint sabe de quién es cada recurso**. Roles resuelve la mitad de eso (*"¿esta cuenta es administradora?"*); la otra mitad (*"¿esta orden, este cliente, son de quien hace la petición?"*) sigue sin existir, porque `Client` sigue sin FK a `IdentityUser`.
+Pero el problema de fondo no era "falta el rol Admin" — era que ningún endpoint sabía de quién era cada recurso. Esa parte ya está resuelta para clientes nuevos y órdenes: los servicios derivan el cliente desde el `UserId` del JWT para usuarios normales, mientras `Admin` mantiene acceso global. `Client.UserId` sigue siendo nullable de forma temporal para no romper clientes históricos que aún no se pueden mapear.
 
 Y ahora hay una prueba más contundente que antes de que ese segundo hueco sigue abierto — está en el mismo recurso, contradiciéndose a sí mismo. Verificado arrancando la API:
 
@@ -30,12 +30,12 @@ PUT    /api/orders/{id:int}                        JWT
 DELETE /api/orders/{id:int}                        JWT
 ```
 
-**Leer una orden exige ser Admin. Crearla, editarla o borrarla no exige nada más que estar logueado.** Una cuenta `User` normal hoy no puede ver ni sus propias órdenes — 403 seguro, porque no existe ningún endpoint de lectura que no sea Admin-only — pero **sí puede crear, editar o borrar órdenes a nombre de cualquier otro cliente**, porque `OrderService.ValidateReferencesAsync` solo comprueba que el `clientId` del cuerpo exista, nunca que sea el suyo. Es el mismo endpoint siendo paranoico para leer y permisivo para escribir.
+**Este hueco de propiedad quedó corregido.** Una cuenta `User` puede leer sus órdenes y crear, editar o borrar únicamente las suyas; `Admin` puede operar sobre cualquier cliente. El `ClientId` enviado en el body no otorga propiedad: para usuarios normales se ignora o se sobrescribe con el cliente asociado al JWT.
 
 | Lo que ya funciona bien | El hueco estructural que queda |
 |---|---|
-| Arquitectura por capas, `Result<T>`, logging, manejo de errores | `Client` sigue sin FK a `IdentityUser` — cero endpoints pueden preguntar "¿esto es tuyo?" |
-| Rol `Admin` real: catálogo y clientes ya lo exigen donde corresponde | `Orders` en escritura sigue sin dueño — y ahora en lectura excluye hasta al dueño legítimo |
+| Arquitectura por capas, `Result<T>`, logging, manejo de errores | Clientes históricos aún sin asociación; `Client.UserId` sigue nullable hasta completar el backfill |
+| Rol `Admin` real: catálogo, clientes y acceso global a órdenes | Self-service, carrito, checkout, pagos y ciclo de vida de órdenes siguen pendientes |
 | CORS, `/health`, rate limiting en Auth | No hay administrador inicial ni forma de promover una cuenta salvo SQL directo |
 | Catálogo público paginado, filtrable, con imagen | Carrito, checkout, pagos: sigue sin existir ni un endpoint |
 
@@ -58,9 +58,9 @@ DELETE /api/clients/{id:int}                       Admin
 
 Queda una consecuencia colateral, no un problema de seguridad: al cerrar esto para todos menos `Admin`, **tampoco un cliente puede ya gestionar su propio perfil** — antes al menos podía, por accidente, tocar su propio registro si conocía su id; ahora ningún `User` puede tocar ningún `Client`, ni el suyo. Cerrar el hueco de seguridad hizo más urgente, no menos, el endpoint `/me` de §3.1: hoy no hay ninguna vía de autoservicio.
 
-### 1.2 `POST` / `PUT` / `DELETE /api/orders` como reemplazo/borrado total — ❌ Sigue exactamente igual
+### 1.2 `POST` / `PUT` / `DELETE /api/orders` como reemplazo/borrado total — ⚠️ Propiedad corregida; diseño contable pendiente
 
-Una orden es un registro contable; no se "reemplaza" por otra con el mismo id, ni se borra. Este punto no se tocó en el PR de roles, y con la lectura ahora bloqueada, el contraste es más visible que antes:
+Una orden es un registro contable; no se debería "reemplazar" por otra con el mismo id ni borrar físicamente. La autorización por propietario ya está corregida, pero el diseño de ciclo de vida sigue pendiente:
 
 ```
 POST   /api/orders                                JWT
@@ -68,9 +68,9 @@ PUT    /api/orders/{id:int}                        JWT
 DELETE /api/orders/{id:int}                        JWT
 ```
 
-Cualquier cuenta autenticada — rol `User`, sin ser `Admin` — puede crear una orden a nombre de cualquier `clientId` que exista, editar cualquier orden por id, o borrarla. Nada de esto pasa por un chequeo de propiedad.
+Los usuarios normales ya no pueden operar órdenes ajenas. Sin embargo, los endpoints genéricos `PUT` y `DELETE` siguen existiendo y el contrato todavía acepta `ClientId`, por compatibilidad y transición; esto debe sustituirse por cancelación y cambios de estado.
 
-**Reemplazo:** `POST /api/orders/{id}/cancel` (solo si el estado lo permite) y `PATCH /api/orders/{id}/status` (solo `Admin`) — ambos en §3.4, bloqueados hasta que exista `Order.Status` (§5). Y el `ClientId` de la creación debe salir del token, no del cuerpo — ver §4.
+**Reemplazo futuro:** `POST /api/orders/{id}/cancel` (solo si el estado lo permite) y `PATCH /api/orders/{id}/status` (solo `Admin`) — ambos en §3.4, bloqueados hasta que exista `Order.Status` (§5). El `ClientId` debe dejar de formar parte del contrato de usuario y derivarse siempre del token.
 
 ### 1.3 `PUT` de reemplazo total en Products / Categories
 
@@ -110,7 +110,7 @@ El botón "Comprar" en `apps/web` sigue deshabilitado — nada de esto cambió c
 | Endpoint | Requisitos |
 |---|---|
 | `GET /api/authentication/me` | Usuario del token: id, email, nombre, **rol** (ya viaja en el JWT, solo falta exponerlo), `emailConfirmed` |
-| `GET` / `PUT /api/clients/me` | El cliente del token propio. Con §1.1 resuelto, es la **única** vía que le queda a un cliente para ver o editar su propio perfil — hoy no existe ninguna. Requiere `Client.UserId` (§5) |
+| `GET` / `PUT /api/clients/me` | El cliente del token propio. La relación `Client.UserId` ya existe, pero el endpoint de autoservicio todavía no está implementado; hoy ningún `User` puede ver o editar su perfil |
 | `POST /api/authentication/logout` | Marca `IsRevoked = true` en el refresh token. Sigue sin escribirse nunca |
 | `POST /api/authentication/resend-confirmation` | Ya hay infraestructura de rate limiting lista para reusar |
 | `POST /api/authentication/forgot-password` / `reset-password` | Sin cambios, sigue faltando |
@@ -152,9 +152,10 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 
 | Endpoint | Falta |
 |---|---|
-| `POST` / `PUT /api/orders` | **Crítico, sin cambios.** `ClientId` viene del body y solo se valida que exista — nunca que pertenezca al token. Cualquier `User` opera órdenes ajenas |
+| `POST` / `PUT /api/orders` | **Contrato pendiente.** `ClientId` todavía se acepta en el body; para `User` se ignora o sobrescribe con el cliente del JWT, pero debe eliminarse del contrato público |
 | `POST` / `PUT /api/orders` | No calcula ni congela precio (`OrderDetail` sin `UnitPrice`, §5) |
-| `GET /api/orders` | **Nuevo, causado por este mismo PR.** Ahora exige `Admin` sin excepción — un `User` no tiene ninguna vía para ver sus propias órdenes, ni siquiera con el `?clientId=` que antes existía como filtro opcional. La lectura pasó de "demasiado abierta" a "cerrada también para el dueño legítimo" |
+| `POST` / `PUT` / `DELETE /api/orders` | **Propiedad resuelta.** El servicio deriva el cliente desde el JWT para usuarios normales y verifica propiedad en lectura, actualización y borrado. El contrato aún acepta `ClientId`, aunque para `User` se ignora o sobrescribe; debe eliminarse en una migración de contrato |
+| `GET /api/orders` | **Propiedad resuelta.** `User` consulta solo sus órdenes y `Admin` conserva el listado global. Sigue pendiente reemplazar el GET/PUT/DELETE genérico por un ciclo de vida de órdenes |
 | Gestión de roles | No hay endpoint ni seed para el primer `Admin` — ver §3.7 |
 | `GET /api/authentication/confirm-email` | Sin cambios: `200` con texto plano en éxito. Sigue pendiente la redirección — ver [`API_llama_al_frontend.md`](./API_llama_al_frontend.md) |
 | Catálogo público (`GET /api/products`, `/api/product-categories`) | Sin rate limiting — el que llegó con este PR cubre solo `AuthenticationController` |
@@ -163,6 +164,8 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 
 - ~~Mutaciones de catálogo sin rol~~ — `Products`, `ProductCategories`: `[Authorize(Roles = "Admin")]` verificado en las tres mutaciones de ambos controladores.
 - ~~`Clients` expuesto a cualquiera~~ — clase completa en `Admin` (§1.1).
+- ~~`Client` sin relación con Identity~~ — `Client.UserId` tiene FK e índice único hacia `AspNetUsers.Id`; el registro crea el cliente asociado y las órdenes aplican autorización por propietario.
+- ~~Órdenes sin chequeo de propiedad~~ — `User` queda limitado a su cliente; `Admin` mantiene acceso global.
 - ~~Sin CORS~~ — política `WebApp`, orígenes desde `CORS_ORIGINS`.
 - ~~Sin `/health`~~ — `MapHealthChecks("/health")` con chequeo de `DbContext`.
 - ~~Sin rate limiting~~ — parcial: cubre Auth completo (login, registro, refresh, confirmación), 5 intentos/minuto.
@@ -176,7 +179,7 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 |---|---|
 | `Product.ImageUrl` | ✅ Aplicado — y ya escribible por API |
 | `IdentityRole` + roles `Admin`/`User` | ✅ Aplicado |
-| `Client.UserId` → FK a `AspNetUsers.Id` | ❌ **El más bloqueante.** Desbloquea `/me`, propiedad real de órdenes, y que `ClientId` se derive del token |
+| `Client.UserId` → FK a `AspNetUsers.Id` | ✅ Aplicado mediante migración `AddClientUserOwnership`; nullable temporal para clientes históricos sin asociación |
 | `OrderDetail.UnitPrice` | ❌ Sin esto, cambiar un precio corrompe en silencio el histórico contable |
 | `Order.Status`, `Order.Total`, `Order.Currency` | ❌ Sin ciclo de vida no se pueden sustituir `PUT`/`DELETE` (§1.2) |
 | Snapshot de dirección de envío en `Order` | ❌ |
@@ -187,13 +190,13 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 
 ## 6. Orden sugerido
 
-1. **`Client.UserId`** (§5). Sigue siendo el prerrequisito de más cosas que ningún otro cambio — ahora con evidencia más clara de por qué: es lo único que permite que `GET /api/orders` deje de excluir al dueño legítimo y que `POST`/`PUT`/`DELETE /api/orders` (§1.2, §4) dejen de operar a ciegas.
-2. **Seed de un `Admin` inicial + endpoint para promover usuarios** (§3.7). Barato, y hoy bloquea probar el resto de la administración sin tocar SQL a mano.
-3. **Arreglar `POST`/`PUT`/`DELETE /api/orders`** para exigir dueño — depende de (1). Es la exposición más concreta que queda abierta en todo el backend.
-4. **`OrderDetail.UnitPrice` y `Order.Status`** (§5). Antes de que haya órdenes reales cuyo histórico se corrompa.
-5. **Cuenta y direcciones** (§3.1, §3.2) — `/me` es más urgente que antes por §1.1.
-6. **Campos de `Product`** y **categoría embebida** en el GET (§2).
-7. **Carrito** (§3.3) → **Checkout** (§3.4) → **Pagos y envíos** (§3.5) → **Imágenes de administración** (§3.6).
+1. **Backfill de `Client.UserId` y endurecimiento de la FK** (§5). Asociar clientes históricos con evidencia válida y hacer `UserId` obligatorio cuando no queden huérfanos.
+2. **Cuenta y self-service** (§3.1): `/api/authentication/me` y `/api/clients/me`.
+3. **Seed de un `Admin` inicial + endpoint para promover usuarios** (§3.7). Sigue bloqueando probar administración sin SQL manual.
+4. **Eliminar `ClientId` del contrato de usuario y cerrar el diseño genérico de órdenes** (§1.2, §4).
+5. **`OrderDetail.UnitPrice` y `Order.Status`** (§5), antes de órdenes reales cuyo histórico se corrompa.
+6. **Carrito** (§3.3) → **Checkout** (§3.4), derivando `ClientId` del token → **Pagos y envíos** (§3.5).
+7. **Campos de `Product`**, categoría embebida e imágenes de administración (§2, §3.6).
 
 Rate limiting en el catálogo público, en cuanto haya tráfico real que lo justifique — es independiente de todo lo anterior.
 
@@ -203,6 +206,9 @@ Rate limiting en el catálogo público, en cuanto haya tráfico real que lo just
 
 | Tema | Detalle |
 |---|---|
+| **Clientes históricos sin asociación** | La migración añade `Client.UserId` nullable; hace falta un proceso de backfill verificable antes de volverlo obligatorio |
+| **Datos de perfil provisionales** | El registro crea un cliente asociado con teléfono/dirección provisionales; `/api/clients/me` debe permitir completar esos datos |
+| **Contrato de órdenes en transición** | `CreateOrderRequest` y `UpdateOrderRequest` aún aceptan `ClientId`; `User` no puede usarlo para cambiar propietario, pero debe eliminarse del contrato público |
 | **Sin proyecto de tests** | Sigue sin existir. Todo lo del PR de roles se verificó a mano, igual que todo lo anterior |
 | **Dos viajes a la base por página** | Sin cambios, sigue sin medirse el efecto real |
 | **Búsqueda sensible a acentos** | Sin cambios — §2 |

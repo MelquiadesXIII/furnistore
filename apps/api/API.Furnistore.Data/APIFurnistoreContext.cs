@@ -1,6 +1,7 @@
 using API.Furnistore.Shared;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 namespace API.Furnistore.Data
 {
@@ -25,6 +26,16 @@ namespace API.Furnistore.Data
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(APIFurnistoreContext).Assembly);
+
+            modelBuilder.Entity<Client>()
+                .HasOne<IdentityUser>()
+                .WithOne()
+                .HasForeignKey<Client>(client => client.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Client>()
+                .HasIndex(client => client.UserId)
+                .IsUnique();
         }
     }
 }

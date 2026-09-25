@@ -12,19 +12,17 @@ namespace API.Furnistore.API.Controllers
     public sealed class OrdersController(OrderService orders) : ControllerBase
     {
         [HttpGet]
-        [Authorize(Roles = "Admin")] 
         [ProducesResponseType<PagedResult<OrderResponse>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> Search(
             [FromQuery] OrderQuery query,
             CancellationToken cancellationToken
-        ) => (await orders.SearchAsync(query, cancellationToken)).ToActionResult(this);
+        ) => (await orders.SearchAsync(query, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
 
         [HttpGet("{id:int}")]
-        [Authorize(Roles = "Admin")] 
         [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
-            (await orders.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
+            (await orders.GetByIdAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
 
         [HttpPost]
         [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
@@ -34,7 +32,7 @@ namespace API.Furnistore.API.Controllers
             CancellationToken cancellationToken
         )
         {
-            var result = await orders.CreateAsync(request, User.UserId(), cancellationToken);
+            var result = await orders.CreateAsync(request, User.UserId(), User.IsInRole("Admin"), cancellationToken);
 
             return result.IsSuccess
                 ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
@@ -48,13 +46,13 @@ namespace API.Furnistore.API.Controllers
             UpdateOrderRequest request,
             CancellationToken cancellationToken
         ) =>
-            (await orders.UpdateAsync(id, request, User.UserId(), cancellationToken))
+            (await orders.UpdateAsync(id, request, User.UserId(), User.IsInRole("Admin"), cancellationToken))
                 .ToNoContentResult(this);
 
         [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
-            (await orders.DeleteAsync(id, User.UserId(), cancellationToken))
+            (await orders.DeleteAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken))
                 .ToNoContentResult(this);
     }
 }

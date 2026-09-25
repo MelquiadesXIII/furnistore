@@ -73,6 +73,21 @@ namespace API.Furnistore.Application.Auth
                 );
             }
 
+            var nameParts = request.Name.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            var firstName = nameParts[0];
+            var lastName = nameParts.Length > 1 ? nameParts[1] : firstName;
+
+            db.Clients.Add(new Client
+            {
+                UserId = user.Id,
+                FirstName = firstName,
+                LastName = lastName,
+                BirthDate = DateTime.SpecifyKind(DateTime.UtcNow.AddYears(-18).AddDays(-1), DateTimeKind.Utc),
+                Phone = "+10000000000",
+                Address = "Pendiente de completar",
+            });
+            await db.SaveChangesAsync(cancellationToken);
+
             logger.LogInformation(ApiEvents.UserRegistered, "User {UserId} registered", user.Id);
             
             // Se asinga un rol user por defecto.

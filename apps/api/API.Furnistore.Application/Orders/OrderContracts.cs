@@ -29,7 +29,7 @@ namespace API.Furnistore.Application.Orders
         public int OrderNumber { get; init; }
 
         [Range(1, int.MaxValue)]
-        public int ClientId { get; init; }
+        public int? ClientId { get; init; }
 
         public DateTime OrderDate { get; init; }
 
@@ -48,7 +48,7 @@ namespace API.Furnistore.Application.Orders
         public int OrderNumber { get; init; }
 
         [Range(1, int.MaxValue)]
-        public int ClientId { get; init; }
+        public int? ClientId { get; init; }
 
         public DateTime OrderDate { get; init; }
 

@@ -44,6 +44,17 @@ export function resendConfirmation(
   });
 }
 
+export function verifyEmail(
+  request: ApiSchemas["VerifyEmailRequest"],
+  clientIp?: string,
+): Promise<Result<void>> {
+  return apiFetch<void>("/api/authentication/verify-email", {
+    method: "POST",
+    body: request,
+    headers: forwardedFor(clientIp),
+  });
+}
+
 export function refreshToken(
   token: string,
   refreshTokenValue: string,

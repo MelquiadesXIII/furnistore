@@ -36,4 +36,9 @@ namespace API.Furnistore.Application.Auth
     public sealed record AuthTokensResponse(string Token, string RefreshToken);
 
     public sealed record RegisterResponse(bool EmailSent);
+    public sealed record LogoutRequest
+    {
+        [Required]
+        public required string RefreshToken { get; init; }
+    }
 }

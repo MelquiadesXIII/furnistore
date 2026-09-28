@@ -4,7 +4,7 @@ Análisis del estado de `apps/api` frente a lo que necesita una tienda online re
 
 Complementa a [`api.md`](./api.md), que documenta lo que la API hace **hoy**, y a [`api-architecture.md`](./api-architecture.md), que explica **cómo está construida y por qué**. Este documento apunta a lo que **debería** hacer.
 
-> **Actualizado: 2026-09-25.** Desde la revisión anterior se mergeó la rama `Roles` (PR #5) y se implementó la asociación `Client.UserId` con Identity: rol `Admin`, seed de roles al arranque, claims de rol en el JWT, CORS, `/health`, rate limiting en Auth y autorización por propietario en órdenes. La solución compila con `dotnet build apps/api/API.sln -v minimal` (0 advertencias, 0 errores). Este documento sigue describiendo el estado del roadmap completo, no un cierre de todo el negocio.
+> **Actualizado: 2026-09-28.** Desde la revisión anterior se mergeó la rama `Roles` (PR #5), se implementó la asociación `Client.UserId` con Identity, y se añadió el endpoint de logout real. La solución compila con `dotnet build apps/api/API.sln -v minimal` (0 advertencias, 0 errores). Este documento sigue describiendo el estado del roadmap completo, no un cierre de todo el negocio.
 
 ---
 
@@ -37,7 +37,7 @@ DELETE /api/orders/{id:int}                        JWT
 | Arquitectura por capas, `Result<T>`, logging, manejo de errores | Clientes históricos aún sin asociación; `Client.UserId` sigue nullable hasta completar el backfill |
 | Rol `Admin` real: catálogo, clientes y acceso global a órdenes | Self-service, carrito, checkout, pagos y ciclo de vida de órdenes siguen pendientes |
 | CORS, `/health`, rate limiting en Auth | No hay administrador inicial ni forma de promover una cuenta salvo SQL directo |
-| Catálogo público paginado, filtrable, con imagen | Carrito, checkout, pagos: sigue sin existir ni un endpoint |
+| Logout real con revocación de refresh token (`POST /api/authentication/logout`) | El logout está bajo `[AllowAnonymous]`; ver deuda en §7 |
 
 ---
 
@@ -111,7 +111,6 @@ El botón "Comprar" en `apps/web` sigue deshabilitado — nada de esto cambió c
 |---|---|
 | `GET /api/authentication/me` | Usuario del token: id, email, nombre, **rol** (ya viaja en el JWT, solo falta exponerlo), `emailConfirmed` |
 | `GET` / `PUT /api/clients/me` | El cliente del token propio. La relación `Client.UserId` ya existe, pero el endpoint de autoservicio todavía no está implementado; hoy ningún `User` puede ver o editar su perfil |
-| `POST /api/authentication/logout` | Marca `IsRevoked = true` en el refresh token. Sigue sin escribirse nunca |
 | `POST /api/authentication/resend-confirmation` | Ya hay infraestructura de rate limiting lista para reusar |
 | `POST /api/authentication/forgot-password` / `reset-password` | Sin cambios, sigue faltando |
 
@@ -170,6 +169,7 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 - ~~Sin `/health`~~ — `MapHealthChecks("/health")` con chequeo de `DbContext`.
 - ~~Sin rate limiting~~ — parcial: cubre Auth completo (login, registro, refresh, confirmación), 5 intentos/minuto.
 - ~~El listado de arranque no distingue roles~~ — **falso en la versión anterior de este documento.** Verificado en vivo: `AccessOf` ya lee `IAuthorizeData.Roles` de clase y de método, y el log de arranque imprime `Admin` donde corresponde, no `JWT`.
+- ~~`POST /api/authentication/logout` sin escribir~~ — `AuthService.LogoutAsync` marca `IsRevoked = true` en el refresh token, es idempotente (responde `204` aunque el token no exista o ya esté revocado), y el frontend lo llama desde `UserMenu` antes de borrar las cookies. El `refresh_token` ahora se guarda en cookie `httpOnly` (`REFRESH_COOKIE`) desde el login.
 
 ---
 
@@ -190,10 +190,12 @@ Requisito transversal, no negociable: **el precio nunca viaja desde el cliente**
 
 ## 6. Orden sugerido
 
+> **Completado desde la última revisión:** logout real (§3.1). El resto de la lista sigue vigente.
+
 1. **Backfill de `Client.UserId` y endurecimiento de la FK** (§5). Asociar clientes históricos con evidencia válida y hacer `UserId` obligatorio cuando no queden huérfanos.
 2. **Cuenta y self-service** (§3.1): `/api/authentication/me` y `/api/clients/me`.
 3. **Seed de un `Admin` inicial + endpoint para promover usuarios** (§3.7). Sigue bloqueando probar administración sin SQL manual.
-4. **Eliminar `ClientId` del contrato de usuario y cerrar el diseño genérico de órdenes** (§1.2, §4).
+4. **Eliminar `ClientId` del contrato de usuario y cerrar el diseño genérico de órdenes** (§1.2, §4). 
 5. **`OrderDetail.UnitPrice` y `Order.Status`** (§5), antes de órdenes reales cuyo histórico se corrompa.
 6. **Carrito** (§3.3) → **Checkout** (§3.4), derivando `ClientId` del token → **Pagos y envíos** (§3.5).
 7. **Campos de `Product`**, categoría embebida e imágenes de administración (§2, §3.6).
@@ -215,3 +217,5 @@ Rate limiting en el catálogo público, en cuanto haya tráfico real que lo just
 | **`docs/api.md`** | Revisar que siga describiendo los controladores actuales tras este PR |
 | **Frontera `Application` porosa** | Sin cambios |
 | **Rate limiting solo en Auth** | El catálogo público y los futuros endpoints de §3.1 no lo comparten todavía |
+| **Logout no revoca todos los tokens del usuario** | Solo revoca el refresh token que se le pasa. Si el usuario tiene sesiones en varios dispositivos, las otras siguen activas. Sería deseable un `POST /api/authentication/logout-all` que revoque todos los `RefreshTokens` del `UserId` |
+| **Logout sin autenticación** | El endpoint está bajo `[AllowAnonymous]` (a nivel de clase), así que cualquiera puede llamarlo con un refresh token ajeno y revocarlo. En la práctica no es explotable sin conocer el token (48 caracteres aleatorios), pero es un vector de DoS trivial si se filtra. Cuando exista `GET /me`, se puede añadir `[Authorize]` y validar que el token pertenece al usuario del JWT |

@@ -390,5 +390,33 @@ namespace API.Furnistore.Application.Auth
             var at = email.IndexOf('@');
             return at <= 1 ? "***" : $"{email[0]}***{email[at..]}";
         }
+
+        public async Task<Result> LogoutAsync(
+        LogoutRequest request,
+        CancellationToken cancellationToken
+        )
+        {
+            var storedToken = await db.RefreshTokens.FirstOrDefaultAsync(
+                t => t.Token == request.RefreshToken,
+                cancellationToken
+            );
+
+            if (storedToken is null)
+                return Result.Ok();
+
+            if (storedToken.IsUsed || storedToken.IsRevoked)
+                return Result.Ok();
+
+            storedToken.IsRevoked = true;
+            await db.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation(
+                ApiEvents.LogoutSucceeded,   
+                "Refresh token revoked for user {UserId}",
+                storedToken.UserId
+            );
+
+            return Result.Ok();
+        }
     }
 }

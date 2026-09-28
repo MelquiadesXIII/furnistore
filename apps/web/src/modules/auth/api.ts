@@ -29,3 +29,10 @@ export function refreshToken(
     body: { token, refreshToken: refreshTokenValue },
   });
 }
+
+export function logout(refreshToken: string): Promise<Result<void>> {
+  return apiFetch<void>("/api/authentication/logout", {
+    method: "POST",
+    body: { refreshToken },
+  });
+}

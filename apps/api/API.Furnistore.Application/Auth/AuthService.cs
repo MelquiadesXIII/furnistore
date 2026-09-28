@@ -208,7 +208,7 @@ namespace API.Furnistore.Application.Auth
             var tokens = await IssueTokensAsync(user, cancellationToken);
 
             logger.LogInformation(
-                ApiEvents.LogoutSucceeded,
+                ApiEvents.TokenRefreshed,
                 "Token refreshed for user {UserId}",
                 user.Id
             );
@@ -411,7 +411,7 @@ namespace API.Furnistore.Application.Auth
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
-                ApiEvents.TokenRefreshed,   
+                ApiEvents.LogoutSucceeded,   
                 "Refresh token revoked for user {UserId}",
                 storedToken.UserId
             );

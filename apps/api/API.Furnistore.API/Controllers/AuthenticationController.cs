@@ -46,5 +46,13 @@ namespace API.Furnistore.API.Controllers
             CancellationToken cancellationToken
         ) =>
             (await auth.ConfirmEmailAsync(userId, code, cancellationToken)).ToEmailConfirmationResult(this);
+        
+        
+        [HttpPost("logout")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Logout(
+        LogoutRequest request,
+        CancellationToken cancellationToken
+        ) => (await auth.LogoutAsync(request, cancellationToken)).ToNoContentResult(this);
     }
 }

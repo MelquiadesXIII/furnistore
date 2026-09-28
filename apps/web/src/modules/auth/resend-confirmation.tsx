@@ -25,7 +25,7 @@ export function ResendConfirmation({ email, sentRecently }: { email: string; sen
       const result = await resendConfirmationEmail(email);
 
       if (result.ok) {
-        setFeedback({ tone: "success", text: "Te enviamos un enlace nuevo. Revisa también la carpeta de spam." });
+        setFeedback({ tone: "success", text: "Te enviamos un código nuevo. Revisa también la carpeta de spam." });
         setSecondsLeft(COOLDOWN_SECONDS);
       } else {
         setFeedback({ tone: "error", text: result.message });
@@ -36,8 +36,8 @@ export function ResendConfirmation({ email, sentRecently }: { email: string; sen
   const label = pending
     ? "Enviando…"
     : secondsLeft > 0
-      ? `Reenviar correo en ${secondsLeft} s`
-      : "Reenviar correo de confirmación";
+      ? `Reenviar código en ${secondsLeft} s`
+      : "Reenviar código";
 
   return (
     <div className="flex flex-col gap-2">

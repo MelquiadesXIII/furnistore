@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,12 +7,10 @@ export function LoginForm({
   pending,
   error,
   onSubmit,
-  children,
 }: {
   pending: boolean;
   error: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  children?: ReactNode;
 }) {
   return (
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
@@ -53,8 +51,6 @@ export function LoginForm({
       <Button type="submit" disabled={pending} className="mt-2 w-full">
         {pending ? "Entrando…" : "Entrar"}
       </Button>
-
-      {children}
     </form>
   );
 }

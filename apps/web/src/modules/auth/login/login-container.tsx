@@ -4,19 +4,33 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { EMAIL_NOT_CONFIRMED } from "@/modules/auth/error-messages";
 import { LoginForm } from "@/modules/auth/login/login-form";
-import { ResendConfirmation } from "@/modules/auth/resend-confirmation";
+import { signIn } from "@/modules/auth/sign-in";
 import type { AuthFailure } from "@/modules/auth/types";
+import { VerifyEmailStep } from "@/modules/auth/verify-email/verify-email-step";
 
-const UNREACHABLE: AuthFailure = {
-  code: null,
-  message: "No se pudo conectar con el servidor. Intenta de nuevo en un momento.",
-};
+type Credentials = { email: string; password: string };
 
 export function LoginContainer({ next }: { next: string }) {
   const router = useRouter();
   const [failure, setFailure] = useState<AuthFailure | null>(null);
-  const [email, setEmail] = useState("");
+  const [unconfirmed, setUnconfirmed] = useState<Credentials | null>(null);
   const [pending, setPending] = useState(false);
+
+  function finish() {
+    router.push(next);
+    router.refresh();
+  }
+
+  async function attempt(credentials: Credentials): Promise<AuthFailure | null> {
+    const result = await signIn(credentials.email, credentials.password);
+
+    if (result.ok) {
+      finish();
+      return null;
+    }
+
+    return result.failure;
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,31 +38,37 @@ export function LoginContainer({ next }: { next: string }) {
     setFailure(null);
 
     const formData = new FormData(event.currentTarget);
-    const submittedEmail = String(formData.get("email") ?? "");
+    const credentials = {
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    };
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: submittedEmail, password: formData.get("password") }),
-    }).catch(() => null);
+    const failed = await attempt(credentials);
+    if (!failed) return;
 
-    if (res?.ok) {
-      router.push(next);
-      router.refresh();
-      return;
+    if (failed.code === EMAIL_NOT_CONFIRMED) {
+      setUnconfirmed(credentials);
+    } else {
+      setFailure(failed);
     }
-
-    const data = await res?.json().catch(() => null);
-    setEmail(submittedEmail);
-    setFailure(data?.error ?? UNREACHABLE);
     setPending(false);
   }
 
-  return (
-    <LoginForm pending={pending} error={failure?.message ?? null} onSubmit={handleSubmit}>
-      {failure?.code === EMAIL_NOT_CONFIRMED && (
-        <ResendConfirmation key={email} email={email} sentRecently={false} />
-      )}
-    </LoginForm>
-  );
+  async function handleVerified() {
+    if (!unconfirmed) return;
+
+    const failed = await attempt(unconfirmed);
+    if (failed) {
+      setUnconfirmed(null);
+      setFailure(failed);
+    }
+  }
+
+  if (unconfirmed) {
+    return (
+      <VerifyEmailStep email={unconfirmed.email} emailSent={false} onVerified={handleVerified} />
+    );
+  }
+
+  return <LoginForm pending={pending} error={failure?.message ?? null} onSubmit={handleSubmit} />;
 }

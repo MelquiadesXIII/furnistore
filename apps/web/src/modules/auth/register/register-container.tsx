@@ -1,18 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { CheckEmail } from "@/modules/auth/register/check-email";
 import { RegisterForm } from "@/modules/auth/register/register-form";
+import { signIn, UNREACHABLE } from "@/modules/auth/sign-in";
 import type { AuthFailure } from "@/modules/auth/types";
+import { VerifyEmailStep } from "@/modules/auth/verify-email/verify-email-step";
 
-const UNREACHABLE: AuthFailure = {
-  code: null,
-  message: "No se pudo conectar con el servidor. Intenta de nuevo en un momento.",
-};
-
-type Registered = { email: string; emailSent: boolean };
+type Registered = { email: string; password: string; emailSent: boolean };
 
 export function RegisterContainer() {
+  const router = useRouter();
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const [registered, setRegistered] = useState<Registered | null>(null);
   const [pending, setPending] = useState(false);
@@ -24,6 +22,7 @@ export function RegisterContainer() {
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("emailAddress") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
     const res = await fetch("/api/auth/register", {
       method: "POST",
@@ -32,14 +31,14 @@ export function RegisterContainer() {
         firstName: formData.get("firstName"),
         lastName: formData.get("lastName"),
         emailAddress: email,
-        password: formData.get("password"),
+        password,
       }),
     }).catch(() => null);
 
     const data = await res?.json().catch(() => null);
 
     if (res?.ok) {
-      setRegistered({ email, emailSent: Boolean(data?.emailSent) });
+      setRegistered({ email, password, emailSent: Boolean(data?.emailSent) });
       return;
     }
 
@@ -47,8 +46,27 @@ export function RegisterContainer() {
     setPending(false);
   }
 
+  async function handleVerified() {
+    if (!registered) return;
+
+    const result = await signIn(registered.email, registered.password);
+
+    if (result.ok) {
+      router.push("/");
+      router.refresh();
+    } else {
+      router.push("/login");
+    }
+  }
+
   if (registered) {
-    return <CheckEmail email={registered.email} emailSent={registered.emailSent} />;
+    return (
+      <VerifyEmailStep
+        email={registered.email}
+        emailSent={registered.emailSent}
+        onVerified={handleVerified}
+      />
+    );
   }
 
   return <RegisterForm pending={pending} error={failure?.message ?? null} onSubmit={handleSubmit} />;

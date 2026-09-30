@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/format-price";
@@ -10,12 +11,14 @@ export function CartSummary({
   total,
   itemCount,
   pending,
+  blocked,
 }: {
   subtotal: number;
   shippingCost: number;
   total: number;
   itemCount: number;
   pending: boolean;
+  blocked: boolean;
 }) {
   const shipping = shippingCost === 0 ? "Gratis" : formatPrice(shippingCost);
 
@@ -45,10 +48,20 @@ export function CartSummary({
           <span className="font-mono text-lg text-ink">{pending ? UPDATING : formatPrice(total)}</span>
         </div>
 
-        <Button disabled className="w-full">
-          Continuar al pago
-        </Button>
-        <p className="text-center text-xs text-ink-muted">El pago estará disponible muy pronto.</p>
+        {pending || blocked ? (
+          <Button disabled className="w-full">
+            Continuar al pago
+          </Button>
+        ) : (
+          <Button asChild className="w-full">
+            <Link href="/checkout">Continuar al pago</Link>
+          </Button>
+        )}
+        {blocked && (
+          <p className="text-center text-xs text-ink-muted">
+            Resuelve los avisos de tu carrito para continuar.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

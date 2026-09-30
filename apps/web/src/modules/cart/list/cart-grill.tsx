@@ -6,6 +6,7 @@ import {
   setCartItemQuantity,
   type CartActionResult,
 } from "@/modules/cart/actions";
+import { isPurchasable } from "@/modules/cart/cart-rules";
 import { CartItemCard } from "@/modules/cart/list/cart-item-card";
 import { CartSummary } from "@/modules/cart/list/cart-summary";
 import type { Cart, CartItem } from "@/modules/cart/types";
@@ -79,6 +80,7 @@ export function CartGrill({ cart }: { cart: Cart }) {
         total={cart.total}
         itemCount={itemCount}
         pending={pending}
+        blocked={!items.every(isPurchasable)}
       />
     </div>
   );

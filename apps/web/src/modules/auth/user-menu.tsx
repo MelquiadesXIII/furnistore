@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User } from "lucide-react";
+import { LogOut, Package, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -43,6 +43,12 @@ export function UserMenu({ email }: { email: string }) {
           <Link href="/profile">
             <User />
             Mi perfil
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/orders">
+            <Package />
+            Mis pedidos
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

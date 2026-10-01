@@ -1,11 +1,19 @@
+import { Pagination } from "@/components/pagination";
 import { Panel } from "@/components/panel";
 import { toUserMessage } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { getProducts } from "@/modules/products/api";
 import { ProductGrill } from "@/modules/products/list/product-grill";
-import { ProductPagination } from "@/modules/products/list/product-pagination";
 
 const PAGE_SIZE = 12;
+
+function buildHref(page: number, query: string) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
+}
 
 export async function ProductContainer({
   query,
@@ -50,10 +58,10 @@ export async function ProductContainer({
         <>
           <ProductGrill products={products} isAuthenticated={isAuthenticated} />
           {totalPages > 1 && (
-            <ProductPagination
+            <Pagination
               currentPage={Math.min(currentPage, totalPages)}
               totalPages={totalPages}
-              query={trimmedQuery}
+              hrefFor={(target) => buildHref(target, trimmedQuery)}
             />
           )}
         </>

@@ -34,6 +34,8 @@ namespace API.Furnistore.Shared
 
         public DateOnly EstimatedDeliveryDate { get; set; }
 
+        public DateTime? ProcessingAt { get; set; }
+
         public DateTime? ShippedAt { get; set; }
 
         public DateTime? DeliveredAt { get; set; }

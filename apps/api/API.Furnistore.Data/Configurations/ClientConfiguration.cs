@@ -16,6 +16,7 @@ namespace API.Furnistore.Data.Configurations
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(client => client.UserId).IsUnique();
+            builder.Property(client => client.Version).IsRowVersion();
         }
     }
 }

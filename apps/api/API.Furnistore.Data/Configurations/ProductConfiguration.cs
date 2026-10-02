@@ -10,6 +10,7 @@ namespace API.Furnistore.Data.Configurations
         {
             builder.Property(p => p.Price).HasPrecision(12, 2);
             builder.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
+            builder.Property(p => p.Version).IsRowVersion();
 
             builder
                 .HasOne(p => p.Category)

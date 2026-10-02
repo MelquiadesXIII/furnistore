@@ -29,5 +29,7 @@ namespace API.Furnistore.Shared
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; }
+
+        public uint Version { get; set; }
     }
 }

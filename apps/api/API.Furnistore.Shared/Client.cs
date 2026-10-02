@@ -20,6 +20,8 @@ namespace API.Furnistore.Shared
 
         public string? DeliveryNotes { get; set; }
 
+        public uint Version { get; set; }
+
         public bool IsProfileComplete =>
             !string.IsNullOrWhiteSpace(Phone)
             && !string.IsNullOrWhiteSpace(Street)

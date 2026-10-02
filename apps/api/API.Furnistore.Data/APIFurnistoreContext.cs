@@ -24,6 +24,8 @@ namespace API.Furnistore.Data
 
         public DbSet<EmailVerificationCode> EmailVerificationCodes { get; set; }
 
+        public DbSet<AuditEntry> AuditEntries { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

@@ -23,12 +23,13 @@ namespace API.Furnistore.Data.Configurations
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(order => new { order.ClientId, order.PlacedAt });
+            builder.HasIndex(order => new { order.Status, order.PlacedAt });
 
             builder.ToTable(table =>
             {
                 table.HasCheckConstraint(
                     "CK_Orders_Status",
-                    "\"Status\" IN ('Paid', 'Shipped', 'Delivered', 'Cancelled')"
+                    "\"Status\" IN ('Paid', 'Processing', 'Shipped', 'Delivered', 'Cancelled')"
                 );
                 table.HasCheckConstraint(
                     "CK_Orders_Amounts",

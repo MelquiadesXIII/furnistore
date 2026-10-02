@@ -19,6 +19,12 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId ClientUpdated = new(1202, nameof(ClientUpdated));
         public static readonly EventId ClientDeleted = new(1203, nameof(ClientDeleted));
         public static readonly EventId ClientNotFound = new(1210, nameof(ClientNotFound));
+        public static readonly EventId CustomerUnlocked = new(1221, nameof(CustomerUnlocked));
+        public static readonly EventId CustomerDisabled = new(1222, nameof(CustomerDisabled));
+        public static readonly EventId CustomerEnabled = new(1223, nameof(CustomerEnabled));
+        public static readonly EventId AdminRoleGranted = new(1224, nameof(AdminRoleGranted));
+        public static readonly EventId AdminRoleRevoked = new(1225, nameof(AdminRoleRevoked));
+        public static readonly EventId CustomerActionRejected = new(1230, nameof(CustomerActionRejected));
 
         public static readonly EventId CartItemAdded = new(1301, nameof(CartItemAdded));
         public static readonly EventId CartItemUpdated = new(1302, nameof(CartItemUpdated));
@@ -43,6 +49,7 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId OrderShipped = new(3005, nameof(OrderShipped));
         public static readonly EventId OrderDelivered = new(3006, nameof(OrderDelivered));
         public static readonly EventId OrderCancelled = new(3007, nameof(OrderCancelled));
+        public static readonly EventId OrderProcessing = new(3008, nameof(OrderProcessing));
         public static readonly EventId OrderNotFound = new(3010, nameof(OrderNotFound));
         public static readonly EventId CheckoutRejected = new(3012, nameof(CheckoutRejected));
         public static readonly EventId OrderTransitionRejected = new(3013, nameof(OrderTransitionRejected));
@@ -55,6 +62,7 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId DatabaseWarmupFailed = new(5006, nameof(DatabaseWarmupFailed));
         public static readonly EventId SmtpNotConfigured = new(5007, nameof(SmtpNotConfigured));
         public static readonly EventId RequestRateLimited = new(5008, nameof(RequestRateLimited));
+        public static readonly EventId VersionConflict = new(5009, nameof(VersionConflict));
         public static readonly EventId LogoutSucceeded = new(2005, nameof(LogoutSucceeded));
     }
 }

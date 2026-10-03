@@ -1,3 +1,4 @@
+using API.Furnistore.Application.Admin.Products;
 using API.Furnistore.Application.Carts;
 using API.Furnistore.Application.Products;
 using Microsoft.EntityFrameworkCore;
@@ -10,19 +11,21 @@ namespace API.Furnistore.IntegrationTests
         private readonly TestData data = new(fixture);
 
         [Fact]
-        public async Task Archived_products_are_hidden_from_the_public_catalog_but_not_from_admins()
+        public async Task Archived_products_are_hidden_from_the_public_catalog_but_listed_in_the_backoffice()
         {
             var marker = Guid.NewGuid().ToString("N")[..8];
             await data.CreateProductAsync($"Visible {marker}", 10m, stock: 1);
             await data.CreateProductAsync($"Archivado {marker}", 10m, stock: 1, isActive: false);
 
-            var visitor = await SearchAsync(new ProductQuery { Search = marker, IncludeInactive = true }, isAdmin: false);
-            var admin = await SearchAsync(new ProductQuery { Search = marker, IncludeInactive = true }, isAdmin: true);
-            var adminDefault = await SearchAsync(new ProductQuery { Search = marker }, isAdmin: true);
+            var visitor = await fixture.RunAsync<ProductService, IReadOnlyList<ProductResponse>>(async service =>
+                (await service.SearchAsync(new ProductQuery { Search = marker }, CancellationToken.None)).Value.Items
+            );
+            var all = await AdminSearchAsync(new AdminProductQuery { Search = marker });
+            var archived = await AdminSearchAsync(new AdminProductQuery { Search = marker, Status = ProductListStatus.Archived });
 
             Assert.Equal([$"Visible {marker}"], visitor.Select(p => p.Name));
-            Assert.Equal(2, admin.Count);
-            Assert.Single(adminDefault);
+            Assert.Equal(2, all.Count);
+            Assert.Equal([$"Archivado {marker}"], archived.Select(p => p.Name));
         }
 
         [Fact]
@@ -77,12 +80,9 @@ namespace API.Furnistore.IntegrationTests
             Assert.All(cart.Items, item => Assert.True(item.IsActive));
         }
 
-        private async Task<IReadOnlyList<ProductResponse>> SearchAsync(ProductQuery query, bool isAdmin)
-        {
-            await using var db = fixture.CreateContext();
-            var result = await new ProductService(db, NullLogger<ProductService>.Instance)
-                .SearchAsync(query, isAdmin, CancellationToken.None);
-            return result.Value.Items;
-        }
+        private Task<IReadOnlyList<AdminProductResponse>> AdminSearchAsync(AdminProductQuery query) =>
+            fixture.RunAsync<AdminProductService, IReadOnlyList<AdminProductResponse>>(async service =>
+                (await service.SearchAsync(query, CancellationToken.None)).Value.Items
+            );
     }
 }

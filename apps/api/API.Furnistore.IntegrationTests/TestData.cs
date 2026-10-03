@@ -4,7 +4,6 @@ using API.Furnistore.Shared;
 using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace API.Furnistore.IntegrationTests
 {
@@ -57,16 +56,10 @@ namespace API.Furnistore.IntegrationTests
             await db.SaveChangesAsync();
         }
 
-        public async Task<Result<OrderResponse>> CheckoutAsync(string userId, decimal expectedTotal)
-        {
-            await using var db = fixture.CreateContext();
-            var service = new OrderService(db, NullLogger<OrderService>.Instance);
-            return await service.CheckoutAsync(
-                new CheckoutRequest { ExpectedTotal = expectedTotal },
-                userId,
-                CancellationToken.None
+        public Task<Result<OrderResponse>> CheckoutAsync(string userId, decimal expectedTotal) =>
+            fixture.RunAsync<OrderService, Result<OrderResponse>>(service =>
+                service.CheckoutAsync(new CheckoutRequest { ExpectedTotal = expectedTotal }, userId, CancellationToken.None)
             );
-        }
 
         public async Task<OrderResponse> PlaceOrderAsync(string userId, int clientId, int productId, int quantity, decimal unitPrice)
         {

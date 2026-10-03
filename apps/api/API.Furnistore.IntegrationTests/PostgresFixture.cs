@@ -1,3 +1,12 @@
+using API.Furnistore.Application.Admin.Audit;
+using API.Furnistore.Application.Admin.Categories;
+using API.Furnistore.Application.Admin.Customers;
+using API.Furnistore.Application.Admin.Orders;
+using API.Furnistore.Application.Admin.Products;
+using API.Furnistore.Application.Carts;
+using API.Furnistore.Application.Clients;
+using API.Furnistore.Application.Orders;
+using API.Furnistore.Application.Products;
 using API.Furnistore.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +20,16 @@ namespace API.Furnistore.IntegrationTests
         private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine").Build();
         private ServiceProvider services = null!;
 
+        public string ConnectionString => container.GetConnectionString();
+
         public AsyncServiceScope CreateScope() => services.CreateAsyncScope();
+
+        public async Task<TResult> RunAsync<TService, TResult>(Func<TService, Task<TResult>> action)
+            where TService : notnull
+        {
+            await using var scope = CreateScope();
+            return await action(scope.ServiceProvider.GetRequiredService<TService>());
+        }
 
         public APIFurnistoreContext CreateContext() =>
             services.GetRequiredService<IDbContextFactory<APIFurnistoreContext>>().CreateDbContext();
@@ -50,6 +68,18 @@ namespace API.Furnistore.IntegrationTests
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<APIFurnistoreContext>()
                 .AddDefaultTokenProviders();
+            collection.AddSingleton(TimeProvider.System);
+            collection.AddScoped<ProductService>();
+            collection.AddScoped<CartService>();
+            collection.AddScoped<ClientService>();
+            collection.AddScoped<OrderService>();
+            collection.AddScoped<OrderWorkflow>();
+            collection.AddScoped<AuditLog>();
+            collection.AddScoped<AuditService>();
+            collection.AddScoped<AdminOrderService>();
+            collection.AddScoped<AdminProductService>();
+            collection.AddScoped<AdminCategoryService>();
+            collection.AddScoped<AdminCustomerService>();
             return collection.BuildServiceProvider();
         }
 

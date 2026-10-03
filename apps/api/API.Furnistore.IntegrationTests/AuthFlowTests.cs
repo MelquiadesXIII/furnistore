@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using API.Furnistore.Application.Admin.Customers;
 using API.Furnistore.Application.Auth;
 using API.Furnistore.Data;
+using API.Furnistore.Shared.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -286,6 +288,14 @@ namespace API.Furnistore.IntegrationTests
             );
             Assert.True(refreshed.IsSuccess, refreshed.Error?.Message);
 
+            var concurrent = await WithAuthAsync(
+                outbox,
+                auth => auth.RefreshAsync(new RefreshTokenRequest { Token = tokens.Token, RefreshToken = tokens.RefreshToken }, CancellationToken.None)
+            );
+            Assert.True(concurrent.IsSuccess, "A reuse inside the grace window covers parallel requests");
+
+            clock.Advance(TimeSpan.FromSeconds(31));
+
             var reused = await WithAuthAsync(
                 outbox,
                 auth => auth.RefreshAsync(new RefreshTokenRequest { Token = tokens.Token, RefreshToken = tokens.RefreshToken }, CancellationToken.None)
@@ -300,6 +310,63 @@ namespace API.Furnistore.IntegrationTests
             await using var check = fixture.CreateContext();
             var latest = await check.RefreshTokens.SingleAsync(t => t.TokenHash == RefreshTokenHasher.Hash(refreshed.Value.RefreshToken));
             Assert.True(latest.IsRevoked);
+        }
+
+        [Fact]
+        public async Task A_disabled_account_cannot_sign_in_or_refresh_and_failed_attempts_do_not_lift_it()
+        {
+            var email = await RegisterConfirmedAsync();
+            var outbox = new Outbox();
+            var tokens = (await WithAuthAsync(outbox, auth => auth.LoginAsync(Login(email), CancellationToken.None))).Value;
+
+            var customerId = await fixture.RunAsync<AdminCustomerService, int?>(service =>
+                service.FindIdByEmailAsync(email, CancellationToken.None)
+            );
+            var disabled = await fixture.RunAsync<AdminCustomerService, Result<AdminCustomerResponse>>(service =>
+                service.DisableAsync(customerId!.Value, "admin-1", CancellationToken.None)
+            );
+            Assert.True(disabled.IsSuccess, disabled.Error?.Message);
+            Assert.True(disabled.Value.Account.IsDisabled);
+
+            for (var attempt = 0; attempt < 6; attempt++)
+            {
+                var wrong = await WithAuthAsync(outbox, auth => auth.LoginAsync(Login(email, "Wrong12345"), CancellationToken.None));
+                Assert.Equal("auth.invalid_credentials", wrong.Error!.Code);
+            }
+
+            clock.Advance(TimeSpan.FromMinutes(30));
+
+            var right = await WithAuthAsync(outbox, auth => auth.LoginAsync(Login(email), CancellationToken.None));
+            Assert.Equal("auth.account_disabled", right.Error!.Code);
+
+            var refresh = await WithAuthAsync(
+                outbox,
+                auth => auth.RefreshAsync(new RefreshTokenRequest { Token = tokens.Token, RefreshToken = tokens.RefreshToken }, CancellationToken.None)
+            );
+            Assert.False(refresh.IsSuccess);
+
+            await fixture.RunAsync<AdminCustomerService, Result<AdminCustomerResponse>>(service =>
+                service.EnableAsync(customerId!.Value, "admin-1", CancellationToken.None)
+            );
+
+            var again = await WithAuthAsync(outbox, auth => auth.LoginAsync(Login(email), CancellationToken.None));
+            Assert.True(again.IsSuccess, again.Error?.Message);
+        }
+
+        [Fact]
+        public async Task A_revoked_refresh_token_is_rejected_even_inside_the_grace_window()
+        {
+            var email = await RegisterConfirmedAsync();
+            var outbox = new Outbox();
+            var tokens = (await WithAuthAsync(outbox, auth => auth.LoginAsync(Login(email), CancellationToken.None))).Value;
+            var request = new RefreshTokenRequest { Token = tokens.Token, RefreshToken = tokens.RefreshToken };
+
+            Assert.True((await WithAuthAsync(outbox, auth => auth.RefreshAsync(request, CancellationToken.None))).IsSuccess);
+
+            await WithAuthAsync(outbox, auth => auth.LogoutAsync(new LogoutRequest { RefreshToken = tokens.RefreshToken }, CancellationToken.None));
+
+            var afterLogout = await WithAuthAsync(outbox, auth => auth.RefreshAsync(request, CancellationToken.None));
+            Assert.Equal("auth.invalid_refresh_token", afterLogout.Error!.Code);
         }
 
         private async Task<string> RegisterConfirmedAsync()

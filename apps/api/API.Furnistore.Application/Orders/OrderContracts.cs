@@ -12,9 +12,6 @@ namespace API.Furnistore.Application.Orders
         [Range(1, 100)]
         public int PageSize { get; init; } = 20;
 
-        [Range(1, int.MaxValue)]
-        public int? ClientId { get; init; }
-
         public OrderStatus? Status { get; init; }
     }
 
@@ -49,6 +46,7 @@ namespace API.Furnistore.Application.Orders
         DateTime PlacedAt,
         DateTime? PaidAt,
         DateOnly EstimatedDeliveryDate,
+        DateTime? ProcessingAt,
         DateTime? ShippedAt,
         DateTime? DeliveredAt,
         DateTime? CancelledAt,

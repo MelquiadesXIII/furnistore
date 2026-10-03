@@ -14,17 +14,5 @@ namespace API.Furnistore.Application.ProductCategories
         public string? Search { get; init; }
     }
 
-    public sealed record CreateProductCategoryRequest
-    {
-        [Required, StringLength(60, MinimumLength = 2)]
-        public required string Name { get; init; }
-    }
-
-    public sealed record UpdateProductCategoryRequest
-    {
-        [Required, StringLength(60, MinimumLength = 2)]
-        public required string Name { get; init; }
-    }
-
     public sealed record ProductCategoryResponse(int Id, string Name);
 }

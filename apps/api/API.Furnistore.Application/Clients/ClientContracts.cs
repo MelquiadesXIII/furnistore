@@ -2,18 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace API.Furnistore.Application.Clients
 {
-    public sealed record ClientQuery
-    {
-        [Range(1, int.MaxValue)]
-        public int Page { get; init; } = 1;
-
-        [Range(1, 100)]
-        public int PageSize { get; init; } = 20;
-
-        [StringLength(120)]
-        public string? Search { get; init; }
-    }
-
     public sealed record ShippingAddress
     {
         [Required, StringLength(200, MinimumLength = 3)]

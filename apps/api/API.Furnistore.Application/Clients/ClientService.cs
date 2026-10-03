@@ -9,43 +9,6 @@ namespace API.Furnistore.Application.Clients
 {
     public sealed class ClientService(APIFurnistoreContext db, ILogger<ClientService> logger)
     {
-        public async Task<Result<PagedResult<ClientResponse>>> SearchAsync(
-            ClientQuery query,
-            CancellationToken cancellationToken
-        )
-        {
-            var clients = WithEmail();
-
-            if (!string.IsNullOrWhiteSpace(query.Search))
-            {
-                var pattern = $"%{query.Search.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
-                clients = clients.Where(row =>
-                    EF.Functions.ILike(row.Client.FirstName, pattern, "\\")
-                    || EF.Functions.ILike(row.Client.LastName, pattern, "\\")
-                    || EF.Functions.ILike(row.Email!, pattern, "\\")
-                );
-            }
-
-            var total = await clients.CountAsync(cancellationToken);
-
-            var rows = await clients
-                .OrderBy(row => row.Client.LastName)
-                .ThenBy(row => row.Client.FirstName)
-                .ThenBy(row => row.Client.ID)
-                .Skip((query.Page - 1) * query.PageSize)
-                .Take(query.PageSize)
-                .ToListAsync(cancellationToken);
-
-            return Result.Ok(
-                new PagedResult<ClientResponse>(
-                    rows.Select(row => ToResponse(row.Client, row.Email)).ToList(),
-                    total,
-                    query.Page,
-                    query.PageSize
-                )
-            );
-        }
-
         public async Task<Result<ClientResponse>> GetMeAsync(
             string userId,
             CancellationToken cancellationToken
@@ -73,86 +36,25 @@ namespace API.Furnistore.Application.Clients
                 return Result.Fail(SelfNotFound());
 
             Apply(client, request);
-            await db.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Fail(
+                    Error.Conflict(
+                        "client.version_conflict",
+                        "Tus datos cambiaron mientras los editabas. Recarga e intenta de nuevo."
+                    )
+                );
+            }
 
             logger.LogInformation(
                 ApiEvents.ClientUpdated,
                 "Client {ClientId} self-updated by {UserId}",
                 client.ID,
-                userId
-            );
-
-            return Result.Ok();
-        }
-
-        public async Task<Result<ClientResponse>> GetByIdAsync(
-            int id,
-            CancellationToken cancellationToken
-        )
-        {
-            var row = await WithEmail()
-                .Where(row => row.Client.ID == id)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (row is null)
-                return Result.Fail<ClientResponse>(NotFound(id));
-
-            return Result.Ok(ToResponse(row.Client, row.Email));
-        }
-
-        public async Task<Result> UpdateAsync(
-            int id,
-            UpdateClientRequest request,
-            string userId,
-            CancellationToken cancellationToken
-        )
-        {
-            var client = await db.Clients.FirstOrDefaultAsync(c => c.ID == id, cancellationToken);
-
-            if (client is null)
-                return Result.Fail(NotFound(id));
-
-            Apply(client, request);
-            await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogInformation(
-                ApiEvents.ClientUpdated,
-                "Client {ClientId} updated by {UserId}",
-                id,
-                userId
-            );
-
-            return Result.Ok();
-        }
-
-        public async Task<Result> DeleteAsync(
-            int id,
-            string userId,
-            CancellationToken cancellationToken
-        )
-        {
-            var client = await db.Clients.FirstOrDefaultAsync(c => c.ID == id, cancellationToken);
-
-            if (client is null)
-                return Result.Fail(NotFound(id));
-
-            var hasOrders = await db.Orders.AnyAsync(o => o.ClientId == id, cancellationToken);
-
-            if (hasOrders)
-                return Result.Fail(
-                    Error.Conflict(
-                        "client.has_orders",
-                        "No se puede borrar un cliente que tiene órdenes."
-                    )
-                );
-
-            db.Clients.Remove(client);
-            await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogInformation(
-                ApiEvents.ClientDeleted,
-                "Client {ClientId} deleted by {UserId}",
-                id,
                 userId
             );
 
@@ -196,12 +98,6 @@ namespace API.Furnistore.Application.Clients
                 AddressOf(client),
                 client.IsProfileComplete
             );
-
-        private Error NotFound(int id)
-        {
-            logger.LogWarning(ApiEvents.ClientNotFound, "Client {ClientId} not found", id);
-            return Error.NotFound("client.not_found", $"No existe el cliente {id}.");
-        }
 
         private Error SelfNotFound()
         {

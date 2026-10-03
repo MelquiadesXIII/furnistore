@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Common;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
@@ -9,30 +7,28 @@ using Microsoft.Extensions.Logging;
 
 namespace API.Furnistore.Application.Orders
 {
-    public sealed class OrderService(APIFurnistoreContext db, ILogger<OrderService> logger)
+    public sealed class OrderService(
+        APIFurnistoreContext db,
+        OrderWorkflow workflow,
+        ILogger<OrderService> logger
+    )
     {
         private const int CheckoutLockNamespace = 3004;
 
         public async Task<Result<PagedResult<OrderResponse>>> SearchAsync(
             OrderQuery query,
             string userId,
-            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
-            var orders = db.Orders.AsNoTracking().Include(o => o.OrderDetails).AsQueryable();
+            var clientId = await GetClientIdAsync(userId, cancellationToken);
+            if (clientId is null)
+                return Result.Ok(new PagedResult<OrderResponse>([], 0, query.Page, query.PageSize));
 
-            if (!isAdmin)
-            {
-                var ownerClientId = await GetClientIdAsync(userId, cancellationToken);
-                if (ownerClientId is null)
-                    return Result.Ok(new PagedResult<OrderResponse>([], 0, query.Page, query.PageSize));
-
-                orders = orders.Where(o => o.ClientId == ownerClientId);
-            }
-
-            if (query.ClientId is int clientId)
-                orders = orders.Where(o => o.ClientId == clientId);
+            var orders = db
+                .Orders.AsNoTracking()
+                .Include(o => o.OrderDetails)
+                .Where(o => o.ClientId == clientId);
 
             if (query.Status is OrderStatus status)
                 orders = orders.Where(o => o.Status == status);
@@ -46,11 +42,11 @@ namespace API.Furnistore.Application.Orders
                 .Take(query.PageSize)
                 .ToListAsync(cancellationToken);
 
-            var images = await LoadImagesAsync(items, cancellationToken);
+            var images = await OrderMapping.LoadImagesAsync(db, items, cancellationToken);
 
             return Result.Ok(
                 new PagedResult<OrderResponse>(
-                    items.Select(order => ToResponse(order, images)).ToList(),
+                    items.Select(order => OrderMapping.ToResponse(order, images)).ToList(),
                     total,
                     query.Page,
                     query.PageSize
@@ -61,17 +57,23 @@ namespace API.Furnistore.Application.Orders
         public async Task<Result<OrderResponse>> GetByIdAsync(
             int id,
             string userId,
-            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
-            var order = await FindVisibleAsync(id, userId, isAdmin, cancellationToken);
+            var clientId = await GetClientIdAsync(userId, cancellationToken);
+
+            var order = clientId is null
+                ? null
+                : await db
+                    .Orders.AsNoTracking()
+                    .Include(o => o.OrderDetails)
+                    .FirstOrDefaultAsync(o => o.Id == id && o.ClientId == clientId, cancellationToken);
 
             if (order is null)
                 return Result.Fail<OrderResponse>(NotFound(id));
 
-            var images = await LoadImagesAsync([order], cancellationToken);
-            return Result.Ok(ToResponse(order, images));
+            var images = await OrderMapping.LoadImagesAsync(db, [order], cancellationToken);
+            return Result.Ok(OrderMapping.ToResponse(order, images));
         }
 
         public async Task<Result<OrderResponse>> CheckoutAsync(
@@ -249,7 +251,7 @@ namespace API.Furnistore.Application.Orders
                     order.Total
                 );
 
-                return Result.Ok(ToResponse(order, lines.ToDictionary(line => line.Id, line => (string?)line.ImageUrl)));
+                return Result.Ok(OrderMapping.ToResponse(order, lines.ToDictionary(line => line.Id, line => (string?)line.ImageUrl)));
             });
         }
 
@@ -257,182 +259,28 @@ namespace API.Furnistore.Application.Orders
             int id,
             CancelOrderRequest request,
             string userId,
-            bool isAdmin,
             CancellationToken cancellationToken
         )
         {
-            var reason = TextInput.NullIfBlank(request.Reason);
-            var strategy = db.Database.CreateExecutionStrategy();
-
-            var cancelled = await strategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-                var now = DateTime.UtcNow;
-
-                var affected = await Visible(userId, isAdmin)
-                    .Where(o => o.Id == id && o.Status == OrderStatus.Paid)
-                    .ExecuteUpdateAsync(
-                        setters => setters
-                            .SetProperty(o => o.Status, OrderStatus.Cancelled)
-                            .SetProperty(o => o.CancelledAt, now)
-                            .SetProperty(o => o.CancelReason, reason),
-                        cancellationToken
-                    );
-
-                if (affected == 1)
-                {
-                    var lines = await db
-                        .OrderDetails.Where(d => d.OrderId == id)
-                        .OrderBy(d => d.ProductId)
-                        .Select(d => new { d.ProductId, d.Quantity })
-                        .ToListAsync(cancellationToken);
-
-                    foreach (var line in lines)
-                    {
-                        await db
-                            .Products.Where(p => p.Id == line.ProductId)
-                            .ExecuteUpdateAsync(
-                                setters => setters.SetProperty(p => p.Stock, p => p.Stock + line.Quantity),
-                                cancellationToken
-                            );
-                    }
-                }
-
-                await transaction.CommitAsync(cancellationToken);
-                return affected == 1;
-            });
-
-            return await TransitionResultAsync(
-                id,
-                userId,
-                isAdmin,
-                cancelled,
-                "cancelar",
-                ApiEvents.OrderCancelled,
-                cancellationToken
-            );
-        }
-
-        public Task<Result<OrderResponse>> ShipAsync(
-            int id,
-            string userId,
-            CancellationToken cancellationToken
-        ) =>
-            AdvanceAsync(
-                id,
-                userId,
-                OrderStatus.Paid,
-                OrderStatus.Shipped,
-                o => o.ShippedAt,
-                "enviar",
-                ApiEvents.OrderShipped,
-                cancellationToken
-            );
-
-        public Task<Result<OrderResponse>> DeliverAsync(
-            int id,
-            string userId,
-            CancellationToken cancellationToken
-        ) =>
-            AdvanceAsync(
-                id,
-                userId,
-                OrderStatus.Shipped,
-                OrderStatus.Delivered,
-                o => o.DeliveredAt,
-                "marcar como entregado",
-                ApiEvents.OrderDelivered,
-                cancellationToken
-            );
-
-        private async Task<Result<OrderResponse>> AdvanceAsync(
-            int id,
-            string userId,
-            OrderStatus from,
-            OrderStatus to,
-            Expression<Func<Order, DateTime?>> stampedAt,
-            string action,
-            EventId eventId,
-            CancellationToken cancellationToken
-        )
-        {
-            var now = DateTime.UtcNow;
-            var affected = await db
-                .Orders.Where(o => o.Id == id && o.Status == from)
-                .ExecuteUpdateAsync(
-                    setters => setters.SetProperty(o => o.Status, to).SetProperty(stampedAt, now),
-                    cancellationToken
-                );
-
-            return await TransitionResultAsync(
-                id,
-                userId,
-                isAdmin: true,
-                affected == 1,
-                action,
-                eventId,
-                cancellationToken
-            );
-        }
-
-        private async Task<Result<OrderResponse>> TransitionResultAsync(
-            int id,
-            string userId,
-            bool isAdmin,
-            bool transitioned,
-            string action,
-            EventId eventId,
-            CancellationToken cancellationToken
-        )
-        {
-            var order = await FindVisibleAsync(id, userId, isAdmin, cancellationToken);
-
-            if (order is null)
+            var clientId = await GetClientIdAsync(userId, cancellationToken);
+            if (clientId is null)
                 return Result.Fail<OrderResponse>(NotFound(id));
 
-            if (!transitioned)
-            {
-                logger.LogWarning(
-                    ApiEvents.OrderTransitionRejected,
-                    "Order {OrderId} rejected '{Action}' while {Status}, requested by {UserId}",
-                    id,
-                    action,
-                    order.Status,
-                    userId
-                );
-                return Result.Fail<OrderResponse>(
-                    Error.Conflict(
-                        "order.invalid_transition",
-                        $"No se puede {action} un pedido {StatusLabel(order.Status)}."
-                    )
-                );
-            }
-
-            logger.LogInformation(
-                eventId,
-                "Order {OrderId} is now {Status}, by {UserId}",
+            var result = await workflow.ApplyAsync(
                 id,
-                order.Status,
-                userId
+                clientId,
+                OrderTransitions.CustomerCancel,
+                request.Reason,
+                userId,
+                cancellationToken
             );
 
-            var images = await LoadImagesAsync([order], cancellationToken);
-            return Result.Ok(ToResponse(order, images));
+            if (!result.IsSuccess)
+                return Result.Fail<OrderResponse>(result.Error!);
+
+            var images = await OrderMapping.LoadImagesAsync(db, [result.Value], cancellationToken);
+            return Result.Ok(OrderMapping.ToResponse(result.Value, images));
         }
-
-        private IQueryable<Order> Visible(string userId, bool isAdmin) =>
-            db.Orders.Where(o => isAdmin || db.Clients.Any(c => c.ID == o.ClientId && c.UserId == userId));
-
-        private Task<Order?> FindVisibleAsync(
-            int id,
-            string userId,
-            bool isAdmin,
-            CancellationToken cancellationToken
-        ) =>
-            Visible(userId, isAdmin)
-                .AsNoTracking()
-                .Include(o => o.OrderDetails)
-                .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
 
         private Task<int?> GetClientIdAsync(string userId, CancellationToken cancellationToken) =>
             db.Clients
@@ -477,73 +325,6 @@ namespace API.Furnistore.Application.Orders
             );
             return error;
         }
-
-        private async Task<Dictionary<int, string?>> LoadImagesAsync(
-            IEnumerable<Order> orders,
-            CancellationToken cancellationToken
-        )
-        {
-            var productIds = orders
-                .SelectMany(order => order.OrderDetails)
-                .Select(detail => detail.ProductId)
-                .Distinct()
-                .ToList();
-
-            return await db
-                .Products.Where(p => productIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.ImageUrl, cancellationToken);
-        }
-
-        private static OrderResponse ToResponse(Order order, IReadOnlyDictionary<int, string?> images) =>
-            new(
-                order.Id,
-                order.OrderNumber,
-                order.Status,
-                order.Status == OrderStatus.Paid,
-                order.PlacedAt,
-                order.PaidAt,
-                order.EstimatedDeliveryDate,
-                order.ShippedAt,
-                order.DeliveredAt,
-                order.CancelledAt,
-                order.CancelReason,
-                order.Subtotal,
-                order.ShippingCost,
-                order.Total,
-                new OrderShipToResponse(
-                    order.ShipToName,
-                    order.ShipToPhone,
-                    new ShippingAddress
-                    {
-                        Street = order.ShipToStreet,
-                        City = order.ShipToCity,
-                        Province = order.ShipToProvince,
-                        DeliveryNotes = order.ShipToDeliveryNotes,
-                    }
-                ),
-                order
-                    .OrderDetails.OrderBy(d => d.ProductName)
-                    .ThenBy(d => d.ProductId)
-                    .Select(d => new OrderLineResponse(
-                        d.ProductId,
-                        d.ProductName,
-                        images.GetValueOrDefault(d.ProductId),
-                        d.Quantity,
-                        d.UnitPrice,
-                        d.UnitPrice * d.Quantity
-                    ))
-                    .ToList()
-            );
-
-        private static string StatusLabel(OrderStatus status) =>
-            status switch
-            {
-                OrderStatus.Paid => "pagado",
-                OrderStatus.Shipped => "enviado",
-                OrderStatus.Delivered => "entregado",
-                OrderStatus.Cancelled => "cancelado",
-                _ => status.ToString(),
-            };
 
         private Error NotFound(int id)
         {

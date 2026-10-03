@@ -12,6 +12,8 @@ namespace API.Furnistore.Shared
 
         public bool IsUsed { get; set; }
 
+        public DateTime? UsedAt { get; set; }
+
         public bool IsRevoked { get; set; }
 
         public DateTime AddedDate { get; set; }

@@ -19,6 +19,7 @@ namespace API.Furnistore.Application.Auth
         public required string Audience { get; init; }
         public required TimeSpan ExpiryTime { get; init; }
         public TimeSpan RefreshTokenLifetime { get; init; } = TimeSpan.FromDays(30);
+        public TimeSpan RefreshTokenReuseGrace { get; init; } = TimeSpan.FromSeconds(30);
     }
 
     public sealed class AuthService(
@@ -105,17 +106,25 @@ namespace API.Furnistore.Application.Auth
             if (user is null)
                 return LoginFailure(email, "user_not_found");
 
-            if (await userManager.IsLockedOutAsync(user))
+            var disabled = AccountLock.IsDisabled(user);
+
+            if (!disabled && await userManager.IsLockedOutAsync(user))
                 return LockedOut(user);
 
             if (!await userManager.CheckPasswordAsync(user, request.Password))
             {
+                if (disabled)
+                    return LoginFailure(email, "bad_password");
+
                 await userManager.AccessFailedAsync(user);
 
                 return await userManager.IsLockedOutAsync(user)
                     ? LockedOut(user)
                     : LoginFailure(email, "bad_password");
             }
+
+            if (disabled)
+                return Disabled(user);
 
             if (user.AccessFailedCount > 0)
                 await userManager.ResetAccessFailedCountAsync(user);
@@ -184,7 +193,12 @@ namespace API.Furnistore.Application.Auth
             if (storedToken is null)
                 return RefreshFailure("refresh_token_unknown", null);
 
-            if (storedToken.IsUsed || storedToken.IsRevoked)
+            var now = clock.GetUtcNow().UtcDateTime;
+
+            if (storedToken.IsRevoked)
+                return RefreshFailure("refresh_token_revoked", storedToken.UserId);
+
+            if (storedToken.IsUsed && !(storedToken.UsedAt > now - jwt.RefreshTokenReuseGrace))
                 return RefreshFailure("refresh_token_spent", storedToken.UserId);
 
             if (storedToken.ExpiryDate < DateTime.UtcNow)
@@ -210,8 +224,15 @@ namespace API.Furnistore.Application.Auth
             if (user is null)
                 return RefreshFailure("user_gone", storedToken.UserId);
 
-            storedToken.IsUsed = true;
-            await db.SaveChangesAsync(cancellationToken);
+            if (AccountLock.IsDisabled(user))
+                return Disabled(user);
+
+            if (!storedToken.IsUsed)
+            {
+                storedToken.IsUsed = true;
+                storedToken.UsedAt = now;
+                await db.SaveChangesAsync(cancellationToken);
+            }
 
             var tokens = await IssueTokensAsync(user, cancellationToken);
 
@@ -480,6 +501,18 @@ namespace API.Furnistore.Application.Auth
             return Result.Fail(error);
         }
 
+        private Result<AuthTokensResponse> Disabled(IdentityUser user)
+        {
+            logger.LogWarning(ApiEvents.LoginLockedOut, "Session rejected for {UserId}: account disabled", user.Id);
+
+            return Result.Fail<AuthTokensResponse>(
+                Error.Forbidden(
+                    "auth.account_disabled",
+                    "Esta cuenta está desactivada. Escríbenos si crees que es un error."
+                )
+            );
+        }
+
         private Result<AuthTokensResponse> LockedOut(IdentityUser user)
         {
             logger.LogWarning(ApiEvents.LoginLockedOut, "Login rejected for {UserId}: locked out", user.Id);
@@ -540,7 +573,7 @@ namespace API.Furnistore.Application.Auth
             if (storedToken is null)
                 return Result.Ok();
 
-            if (storedToken.IsUsed || storedToken.IsRevoked)
+            if (storedToken.IsRevoked)
                 return Result.Ok();
 
             storedToken.IsRevoked = true;

@@ -11,14 +11,6 @@ namespace API.Furnistore.API.Controllers
     [Route("api/clients")]
     public sealed class ClientsController(ClientService clients) : ControllerBase
     {
-        [HttpGet]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType<PagedResult<ClientResponse>>(StatusCodes.Status200OK)]
-        public async Task<IActionResult> Search(
-            [FromQuery] ClientQuery query,
-            CancellationToken cancellationToken
-        ) => (await clients.SearchAsync(query, cancellationToken)).ToActionResult(this);
-
         [HttpGet("me")]
         [ProducesResponseType<ClientResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -33,32 +25,6 @@ namespace API.Furnistore.API.Controllers
             CancellationToken cancellationToken
         ) =>
             (await clients.UpdateMeAsync(User.UserId(), request, cancellationToken))
-                .ToNoContentResult(this);
-
-        [HttpGet("{id:int}")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType<ClientResponse>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
-            (await clients.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
-
-        [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<IActionResult> Update(
-            int id,
-            UpdateClientRequest request,
-            CancellationToken cancellationToken
-        ) =>
-            (await clients.UpdateAsync(id, request, User.UserId(), cancellationToken))
-                .ToNoContentResult(this);
-
-        [HttpDelete("{id:int}")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
-            (await clients.DeleteAsync(id, User.UserId(), cancellationToken))
                 .ToNoContentResult(this);
     }
 }

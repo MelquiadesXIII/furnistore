@@ -17,13 +17,13 @@ namespace API.Furnistore.API.Controllers
         public async Task<IActionResult> Search(
             [FromQuery] OrderQuery query,
             CancellationToken cancellationToken
-        ) => (await orders.SearchAsync(query, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
+        ) => (await orders.SearchAsync(query, User.UserId(), cancellationToken)).ToActionResult(this);
 
         [HttpGet("{id:int}")]
         [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
-            (await orders.GetByIdAsync(id, User.UserId(), User.IsInRole("Admin"), cancellationToken)).ToActionResult(this);
+            (await orders.GetByIdAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
 
         [HttpPost("checkout")]
         [ProducesResponseType<OrderResponse>(StatusCodes.Status201Created)]
@@ -51,23 +51,7 @@ namespace API.Furnistore.API.Controllers
             [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CancelOrderRequest? request,
             CancellationToken cancellationToken
         ) =>
-            (await orders.CancelAsync(id, request ?? new(), User.UserId(), User.IsInRole("Admin"), cancellationToken))
+            (await orders.CancelAsync(id, request ?? new(), User.UserId(), cancellationToken))
                 .ToActionResult(this);
-
-        [HttpPost("{id:int}/ship")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Ship(int id, CancellationToken cancellationToken) =>
-            (await orders.ShipAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
-
-        [HttpPost("{id:int}/deliver")]
-        [Authorize(Roles = "Admin")]
-        [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Deliver(int id, CancellationToken cancellationToken) =>
-            (await orders.DeliverAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
     }
 }

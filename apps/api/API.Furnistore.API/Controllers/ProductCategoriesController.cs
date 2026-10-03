@@ -26,40 +26,5 @@ namespace API.Furnistore.API.Controllers
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
             (await categories.GetByIdAsync(id, cancellationToken)).ToActionResult(this);
-
-        [Authorize(Roles = "Admin")]
-        [HttpPost]
-        [ProducesResponseType<ProductCategoryResponse>(StatusCodes.Status201Created)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Create(
-            CreateProductCategoryRequest request,
-            CancellationToken cancellationToken
-        )
-        {
-            var result = await categories.CreateAsync(request, User.UserId(), cancellationToken);
-
-            return result.IsSuccess
-                ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
-                : result.ToActionResult(this);
-        }
-
-        [Authorize(Roles = "Admin")]
-        [HttpPut("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<IActionResult> Update(
-            int id,
-            UpdateProductCategoryRequest request,
-            CancellationToken cancellationToken
-        ) =>
-            (await categories.UpdateAsync(id, request, User.UserId(), cancellationToken))
-                .ToNoContentResult(this);
-
-        [Authorize(Roles = "Admin")]
-        [HttpDelete("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
-            (await categories.DeleteAsync(id, User.UserId(), cancellationToken))
-                .ToNoContentResult(this);
     }
 }

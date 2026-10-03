@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using API.Furnistore.Application.Auth;
 using API.Furnistore.Application.Common;
+using API.Furnistore.API.Commands;
 using API.Furnistore.API.Configuration;
 using API.Furnistore.API.Extensions;
 using API.Furnistore.API.Middleware;
@@ -210,6 +211,9 @@ try
         if (!await roleManager.RoleExistsAsync("User"))
             await roleManager.CreateAsync(new IdentityRole("User"));
     }
+    if (await AdminCommand.TryRunAsync(app, args))
+        return;
+
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {
@@ -246,3 +250,5 @@ finally
 {
     NLog.LogManager.Shutdown();
 }
+
+public partial class Program;

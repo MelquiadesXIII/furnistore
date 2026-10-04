@@ -5,14 +5,15 @@ import { formatCalendarDate, formatMomentDay } from "@/lib/format-date";
 import { formatPrice } from "@/lib/format-price";
 import { OrderLineThumb } from "@/modules/orders/order-line-thumb";
 import { OrderStatusBadge } from "@/modules/orders/order-status-badge";
-import type { Order } from "@/modules/orders/types";
+import type { Order, OrderStatus } from "@/modules/orders/types";
 
 const MAX_THUMBS = 4;
+const IN_TRANSIT = new Set<OrderStatus>(["Paid", "Processing", "Shipped"]);
 
 export function OrderCard({ order }: { order: Order }) {
   const units = order.lines.reduce((total, line) => total + line.quantity, 0);
   const hidden = order.lines.length - MAX_THUMBS;
-  const inTransit = order.status === "Paid" || order.status === "Shipped";
+  const inTransit = IN_TRANSIT.has(order.status);
 
   return (
     <li>

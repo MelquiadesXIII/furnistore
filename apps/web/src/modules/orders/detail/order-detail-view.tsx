@@ -118,7 +118,7 @@ export function OrderDetailView({ order, justPlaced }: { order: Order; justPlace
           {order.canCancel && (
             <section className="flex flex-col gap-2">
               <p className="text-xs text-ink-muted">
-                Puedes cancelar el pedido mientras no se haya enviado.
+                Puedes cancelar el pedido mientras no hayamos empezado a prepararlo.
               </p>
               <CancelOrderButton orderId={order.id} />
             </section>

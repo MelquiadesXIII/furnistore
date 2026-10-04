@@ -5,6 +5,7 @@ import type { OrderStatus } from "@/modules/orders/types";
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
   Paid: "border-accent text-accent",
+  Processing: "border-accent bg-accent/10 text-accent",
   Shipped: "bg-accent text-accent-ink",
   Delivered: "bg-accent/15 text-accent",
   Cancelled: "bg-brick/10 text-brick",

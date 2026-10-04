@@ -10,12 +10,16 @@ function stepsFor(order: Order): Step[] {
   if (order.status === "Cancelled") {
     return [
       paid,
+      ...(order.processingAt
+        ? [{ label: "En preparación", at: order.processingAt, pending: "" }]
+        : []),
       { label: "Cancelado", at: order.cancelledAt, pending: "", note: order.cancelReason },
     ];
   }
 
   return [
     paid,
+    { label: "En preparación", at: order.processingAt, pending: "Pendiente" },
     { label: "Enviado", at: order.shippedAt, pending: "Pendiente" },
     {
       label: "Entregado",

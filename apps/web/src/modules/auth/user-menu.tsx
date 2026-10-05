@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Package, User } from "lucide-react";
+import { LayoutDashboard, LogOut, Package, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function UserMenu({ email }: { email: string }) {
+export function UserMenu({ email, isAdmin }: { email: string; isAdmin: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -51,6 +51,14 @@ export function UserMenu({ email }: { email: string }) {
             Mis pedidos
           </Link>
         </DropdownMenuItem>
+        {isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <LayoutDashboard />
+              Panel de administración
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" disabled={pending} onSelect={handleLogout}>
           <LogOut />

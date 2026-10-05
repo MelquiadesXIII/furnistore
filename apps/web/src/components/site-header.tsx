@@ -39,7 +39,7 @@ export async function SiteHeader() {
             <CartLink count={null} />
           )}
           {user ? (
-            <UserMenu email={user.email} />
+            <UserMenu email={user.email} isAdmin={user.isAdmin} />
           ) : (
             <Link
               href="/login"

@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { AccountEditor } from "@/modules/account/account-editor";
+import { saveAccount } from "@/modules/account/actions";
 import type { Account } from "@/modules/account/types";
 
 export function ProfileView({ account }: { account: Account }) {
@@ -39,7 +40,7 @@ export function ProfileView({ account }: { account: Account }) {
           <CardContent>
             <AccountEditor
               account={account}
-              returnTo="/profile"
+              action={saveAccount.bind(null, "/profile")}
               submitLabel="Guardar cambios"
               savedMessage="Datos guardados."
             />

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AccountEditor } from "@/modules/account/account-editor";
+import { saveAccount } from "@/modules/account/actions";
 import { ShippingDetails } from "@/modules/account/shipping-details";
 import type { Account } from "@/modules/account/types";
 
@@ -41,7 +42,7 @@ export function CheckoutShipping({ account }: { account: Account }) {
           ) : (
             <AccountEditor
               account={account}
-              returnTo="/checkout"
+              action={saveAccount.bind(null, "/checkout")}
               submitLabel={complete ? "Guardar dirección" : "Guardar y continuar"}
               onSaved={() => setEditing(false)}
               onCancel={complete ? () => setEditing(false) : undefined}

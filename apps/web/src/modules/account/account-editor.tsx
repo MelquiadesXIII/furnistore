@@ -2,19 +2,19 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { AccountForm } from "@/modules/account/account-form";
-import { saveAccount } from "@/modules/account/actions";
+import type { AccountActionResult } from "@/modules/account/account-validation";
 import type { Account, AccountFieldErrors } from "@/modules/account/types";
 
 export function AccountEditor({
   account,
-  returnTo,
+  action,
   submitLabel,
   savedMessage,
   onSaved,
   onCancel,
 }: {
   account: Account;
-  returnTo: string;
+  action: (formData: FormData) => Promise<AccountActionResult>;
   submitLabel: string;
   savedMessage?: string;
   onSaved?: () => void;
@@ -32,7 +32,7 @@ export function AccountEditor({
     setStatus(null);
 
     startTransition(async () => {
-      const result = await saveAccount(formData, returnTo);
+      const result = await action(formData);
 
       if (!result.ok) {
         setError(result.message);

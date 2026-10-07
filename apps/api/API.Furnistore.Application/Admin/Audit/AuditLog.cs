@@ -16,6 +16,7 @@ namespace API.Furnistore.Application.Admin.Audit
         public const string Product = "Product";
         public const string Category = "ProductCategory";
         public const string Customer = "Customer";
+        public const string Report = "Report";
     }
 
     public static class AuditActions
@@ -36,6 +37,7 @@ namespace API.Furnistore.Application.Admin.Audit
         public const string CustomerEnabled = "customer.enabled";
         public const string AdminGranted = "customer.admin_granted";
         public const string AdminRevoked = "customer.admin_revoked";
+        public const string ReportExported = "report.exported";
     }
 
     public sealed record AuditFieldChange(string? From, string? To);
@@ -78,6 +80,7 @@ namespace API.Furnistore.Application.Admin.Audit
                 bool flag => flag ? "true" : "false",
                 decimal number => number.ToString("0.############", CultureInfo.InvariantCulture),
                 DateTime moment => moment.ToString("O", CultureInfo.InvariantCulture),
+                DateOnly day => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
                 _ => value.ToString(),
             };

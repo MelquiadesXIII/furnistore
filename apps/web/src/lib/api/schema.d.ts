@@ -1928,6 +1928,599 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/products/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProductImageResponse"];
+                        "application/json": components["schemas"]["ProductImageResponse"];
+                        "text/json": components["schemas"]["ProductImageResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["SalesReport"];
+                        "application/json": components["schemas"]["SalesReport"];
+                        "text/json": components["schemas"]["SalesReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProductsReport"];
+                        "application/json": components["schemas"]["ProductsReport"];
+                        "text/json": components["schemas"]["ProductsReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["OperationsReport"];
+                        "application/json": components["schemas"]["OperationsReport"];
+                        "text/json": components["schemas"]["OperationsReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/cancellations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["CancellationsReport"];
+                        "application/json": components["schemas"]["CancellationsReport"];
+                        "text/json": components["schemas"]["CancellationsReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["InventoryReport"];
+                        "application/json": components["schemas"]["InventoryReport"];
+                        "text/json": components["schemas"]["InventoryReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    From?: string;
+                    To?: string;
+                    GroupBy?: components["schemas"]["ReportGrouping"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["CustomersReport"];
+                        "application/json": components["schemas"]["CustomersReport"];
+                        "text/json": components["schemas"]["CustomersReport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ReportExportRequest"];
+                    "text/json": components["schemas"]["ReportExportRequest"];
+                    "application/*+json": components["schemas"]["ReportExportRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ValidationProblemDetails"];
+                        "application/json": components["schemas"]["ValidationProblemDetails"];
+                        "text/json": components["schemas"]["ValidationProblemDetails"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/authentication/register": {
         parameters: {
             query?: never;
@@ -3071,6 +3664,7 @@ export interface components {
             lastName: string;
             email: string;
             phone: string | null;
+            identityCard: string | null;
             address: components["schemas"]["ShippingAddress"] | null;
             isProfileComplete: boolean;
             /** Format: int32 */
@@ -3232,6 +3826,39 @@ export interface components {
         CancelOrderRequest: {
             reason: string | null;
         };
+        /** @enum {string} */
+        CancellationActor: "Customer" | "Admin" | "Unknown";
+        CancellationActorRow: {
+            actor: components["schemas"]["CancellationActor"];
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            share: number;
+        };
+        CancellationsReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: int32 */
+            cancelled: number;
+            /** Format: double */
+            rate: number;
+            /** Format: double */
+            lostRevenue: number;
+            byActor: components["schemas"]["CancellationActorRow"][];
+            orders: components["schemas"]["CancelledOrderRow"][];
+        };
+        CancelledOrderRow: {
+            /** Format: int32 */
+            orderId: number;
+            /** Format: int32 */
+            orderNumber: number;
+            customer: string;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            cancelledBy: components["schemas"]["CancellationActor"];
+            reason: string | null;
+            /** Format: double */
+            total: number;
+        };
         CartItemResponse: {
             /** Format: int32 */
             productId: number;
@@ -3267,6 +3894,7 @@ export interface components {
             firstName: string;
             lastName: string;
             phone: string | null;
+            identityCard: string | null;
             address: components["schemas"]["ShippingAddress"] | null;
             isProfileComplete: boolean;
         };
@@ -3292,6 +3920,33 @@ export interface components {
         };
         /** @enum {string} */
         CustomerFilter: "All" | "Admins" | "Disabled" | "LockedOut" | "Unconfirmed";
+        CustomersReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: int32 */
+            buyers: number;
+            /** Format: int32 */
+            newBuyers: number;
+            /** Format: int32 */
+            returningBuyers: number;
+            provinces: components["schemas"]["ProvinceRow"][];
+            topCustomers: components["schemas"]["TopCustomerRow"][];
+        };
+        InventoryReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: int32 */
+            activeProducts: number;
+            /** Format: int32 */
+            outOfStock: number;
+            /** Format: int32 */
+            lowStock: number;
+            /** Format: int32 */
+            healthy: number;
+            /** Format: double */
+            value: number;
+            /** Format: int32 */
+            lowStockThreshold: number;
+            products: components["schemas"]["StockRow"][];
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -3299,6 +3954,19 @@ export interface components {
         };
         LogoutRequest: {
             refreshToken: string;
+        };
+        OperationsReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: int32 */
+            orders: number;
+            /** Format: int32 */
+            delivered: number;
+            /** Format: int32 */
+            deliveredOnTime: number;
+            /** Format: double */
+            onTimeRate: number | null;
+            statuses: components["schemas"]["StatusCountRow"][];
+            overdue: components["schemas"]["OverdueOrderRow"][];
         };
         OrderLineResponse: {
             /** Format: int32 */
@@ -3361,6 +4029,20 @@ export interface components {
         };
         /** @enum {string} */
         OrderStatus: "Paid" | "Processing" | "Shipped" | "Delivered" | "Cancelled";
+        OverdueOrderRow: {
+            /** Format: int32 */
+            orderId: number;
+            /** Format: int32 */
+            orderNumber: number;
+            status: components["schemas"]["OrderStatus"];
+            customer: string;
+            /** Format: date */
+            estimatedDeliveryDate: string;
+            /** Format: int32 */
+            daysLate: number;
+            /** Format: double */
+            total: number;
+        };
         ProblemDetails: {
             type: string | null;
             title: string | null;
@@ -3386,6 +4068,9 @@ export interface components {
             pageSize: number;
             /** Format: int32 */
             readonly totalPages: number;
+        };
+        ProductImageResponse: {
+            url: string;
         };
         /** @enum {string} */
         ProductListStatus: "All" | "Active" | "Archived";
@@ -3420,6 +4105,33 @@ export interface components {
             /** Format: int32 */
             readonly totalPages: number;
         };
+        ProductSalesRow: {
+            /** Format: int32 */
+            productId: number;
+            name: string;
+            category: string;
+            /** Format: int32 */
+            units: number;
+            /** Format: double */
+            revenue: number;
+            /** Format: double */
+            share: number;
+        };
+        ProductsReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: double */
+            revenue: number;
+            /** Format: int32 */
+            unsoldProducts: number;
+            products: components["schemas"]["ProductSalesRow"][];
+        };
+        ProvinceRow: {
+            name: string;
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            revenue: number;
+        };
         RefreshTokenRequest: {
             token: string;
             refreshToken: string;
@@ -3434,9 +4146,62 @@ export interface components {
         RegisterResponse: {
             emailSent: boolean;
         };
+        ReportExportRequest: {
+            report: components["schemas"]["ReportKind"];
+            format: components["schemas"]["ReportFormat"];
+            table?: string | null;
+            /** Format: date */
+            from?: string | null;
+            /** Format: date */
+            to?: string | null;
+        };
+        /** @enum {string} */
+        ReportFormat: "Pdf" | "Csv";
+        /** @enum {string} */
+        ReportGrouping: "Day" | "Week" | "Month";
+        /** @enum {string} */
+        ReportKind: "Sales" | "Products" | "Operations" | "Cancellations" | "Inventory" | "Customers";
+        ReportMeta: {
+            period: components["schemas"]["ReportRange"];
+            groupBy: components["schemas"]["ReportGrouping"];
+            availableGroupings: components["schemas"]["ReportGrouping"][];
+            currency: string;
+            /** Format: date-time */
+            generatedAt: string;
+        };
+        ReportRange: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
         ResendConfirmationRequest: {
             /** Format: email */
             email: string;
+        };
+        SalesPoint: {
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+            /** Format: double */
+            revenue: number;
+            /** Format: int32 */
+            orders: number;
+            /** Format: int32 */
+            units: number;
+        };
+        SalesReport: {
+            meta: components["schemas"]["ReportMeta"];
+            /** Format: double */
+            revenue: number;
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            averageOrderValue: number;
+            /** Format: int32 */
+            units: number;
+            series: components["schemas"]["SalesPoint"][];
         };
         SaveCategoryRequest: {
             name: string;
@@ -3447,6 +4212,36 @@ export interface components {
             province: string;
             deliveryNotes?: string | null;
         };
+        StatusCountRow: {
+            status: components["schemas"]["OrderStatus"];
+            /** Format: int32 */
+            orders: number;
+        };
+        /** @enum {string} */
+        StockLevel: "OutOfStock" | "Low" | "Healthy";
+        StockRow: {
+            /** Format: int32 */
+            productId: number;
+            name: string;
+            category: string;
+            /** Format: int32 */
+            stock: number;
+            /** Format: double */
+            price: number;
+            /** Format: double */
+            value: number;
+            level: components["schemas"]["StockLevel"];
+        };
+        TopCustomerRow: {
+            /** Format: int32 */
+            customerId: number;
+            name: string;
+            email: string;
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            revenue: number;
+        };
         UpdateCartItemRequest: {
             /** Format: int32 */
             quantity: number;
@@ -3455,12 +4250,14 @@ export interface components {
             firstName: string;
             lastName: string;
             phone: string;
+            identityCard: string;
             address: components["schemas"]["ShippingAddress"];
         };
         UpdateCustomerRequest: {
             firstName: string;
             lastName: string;
             phone: string;
+            identityCard: string;
             address: components["schemas"]["ShippingAddress"];
             /** Format: int32 */
             version?: number;

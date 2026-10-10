@@ -28,6 +28,9 @@ namespace API.Furnistore.Application.Clients
         [Required, RegularExpression(@"^\+?[1-9]\d{6,14}$")]
         public required string Phone { get; init; }
 
+        [Required, IdentityCard]
+        public required string IdentityCard { get; init; }
+
         [Required]
         public required ShippingAddress Address { get; init; }
     }
@@ -38,6 +41,7 @@ namespace API.Furnistore.Application.Clients
         string FirstName,
         string LastName,
         string? Phone,
+        string? IdentityCard,
         ShippingAddress? Address,
         bool IsProfileComplete
     );

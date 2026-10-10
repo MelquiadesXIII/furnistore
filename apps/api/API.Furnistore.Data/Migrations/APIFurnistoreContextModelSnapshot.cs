@@ -123,6 +123,10 @@ namespace API.Furnistore.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("IdentityCard")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -147,6 +151,9 @@ namespace API.Furnistore.Data.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("IdentityCard")
+                        .IsUnique();
 
                     b.HasIndex("UserId")
                         .IsUnique();

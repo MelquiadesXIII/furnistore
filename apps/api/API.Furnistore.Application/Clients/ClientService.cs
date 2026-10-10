@@ -1,3 +1,4 @@
+using API.Furnistore.Application.Admin;
 using API.Furnistore.Application.Common;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
@@ -50,6 +51,10 @@ namespace API.Furnistore.Application.Clients
                     )
                 );
             }
+            catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exception))
+            {
+                return Result.Fail(IdentityCardTaken());
+            }
 
             logger.LogInformation(
                 ApiEvents.ClientUpdated,
@@ -60,6 +65,9 @@ namespace API.Furnistore.Application.Clients
 
             return Result.Ok();
         }
+
+        internal static Error IdentityCardTaken() =>
+            Error.Conflict("client.identity_card_taken", "Ese carnet de identidad ya está registrado en otra cuenta.");
 
         private static ShippingAddress? AddressOf(Client client) =>
             client.Street is null || client.City is null || client.Province is null
@@ -82,6 +90,7 @@ namespace API.Furnistore.Application.Clients
             client.FirstName = request.FirstName.Trim();
             client.LastName = request.LastName.Trim();
             client.Phone = request.Phone.Trim();
+            client.IdentityCard = request.IdentityCard.Trim();
             client.Street = request.Address.Street.Trim();
             client.City = request.Address.City.Trim();
             client.Province = request.Address.Province.Trim();
@@ -95,6 +104,7 @@ namespace API.Furnistore.Application.Clients
                 client.FirstName,
                 client.LastName,
                 client.Phone,
+                client.IdentityCard,
                 AddressOf(client),
                 client.IsProfileComplete
             );

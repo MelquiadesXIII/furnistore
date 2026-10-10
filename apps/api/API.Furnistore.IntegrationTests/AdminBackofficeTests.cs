@@ -170,6 +170,7 @@ namespace API.Furnistore.IntegrationTests
                 FirstName = "Ana María",
                 LastName = "Prueba",
                 Phone = "+5355555555",
+                IdentityCard = detail.IdentityCard!,
                 Address = new ShippingAddress { Street = "Calle 10 #5", City = "Vedado", Province = "La Habana" },
                 Version = detail.Version,
             };

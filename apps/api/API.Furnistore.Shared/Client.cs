@@ -12,6 +12,8 @@ namespace API.Furnistore.Shared
 
         public string? Phone { get; set; }
 
+        public string? IdentityCard { get; set; }
+
         public string? Street { get; set; }
 
         public string? City { get; set; }
@@ -24,6 +26,7 @@ namespace API.Furnistore.Shared
 
         public bool IsProfileComplete =>
             !string.IsNullOrWhiteSpace(Phone)
+            && !string.IsNullOrWhiteSpace(IdentityCard)
             && !string.IsNullOrWhiteSpace(Street)
             && !string.IsNullOrWhiteSpace(City)
             && !string.IsNullOrWhiteSpace(Province);

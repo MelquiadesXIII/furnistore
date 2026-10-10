@@ -9,6 +9,10 @@ namespace API.Furnistore.IntegrationTests
 {
     internal sealed class TestData(PostgresFixture fixture)
     {
+        private static int nextIdentityCard;
+
+        public static string NewIdentityCard() => $"900101{Interlocked.Increment(ref nextIdentityCard):D5}";
+
         public async Task<(string UserId, int ClientId)> CreateClientAsync(bool profileComplete = true)
         {
             await using var db = fixture.CreateContext();
@@ -22,6 +26,7 @@ namespace API.Furnistore.IntegrationTests
                 FirstName = "Ana",
                 LastName = "Prueba",
                 Phone = profileComplete ? "+15551234567" : null,
+                IdentityCard = profileComplete ? NewIdentityCard() : null,
                 Street = profileComplete ? "Calle Real 123" : null,
                 City = profileComplete ? "Centro" : null,
                 Province = profileComplete ? "La Habana" : null,

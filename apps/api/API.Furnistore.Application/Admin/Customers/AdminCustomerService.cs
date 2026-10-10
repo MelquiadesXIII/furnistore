@@ -56,6 +56,7 @@ namespace API.Furnistore.Application.Admin.Customers
                     EF.Functions.ILike(row.Client.FirstName + " " + row.Client.LastName, pattern, LikePattern.Escape)
                     || EF.Functions.ILike(row.User.Email ?? string.Empty, pattern, LikePattern.Escape)
                     || EF.Functions.ILike(row.Client.Phone ?? string.Empty, pattern, LikePattern.Escape)
+                    || EF.Functions.ILike(row.Client.IdentityCard ?? string.Empty, pattern, LikePattern.Escape)
                 );
             }
 
@@ -127,6 +128,7 @@ namespace API.Furnistore.Application.Admin.Customers
                     client.LastName,
                     user.Email ?? string.Empty,
                     client.Phone,
+                    client.IdentityCard,
                     client.Street is null || client.City is null || client.Province is null
                         ? null
                         : new ShippingAddress
@@ -174,6 +176,7 @@ namespace API.Furnistore.Application.Admin.Customers
             var firstName = request.FirstName.Trim();
             var lastName = request.LastName.Trim();
             var phone = request.Phone.Trim();
+            var identityCard = request.IdentityCard.Trim();
             var street = request.Address.Street.Trim();
             var city = request.Address.City.Trim();
             var province = request.Address.Province.Trim();
@@ -183,6 +186,7 @@ namespace API.Furnistore.Application.Admin.Customers
                 .Track("firstName", client.FirstName, firstName)
                 .Track("lastName", client.LastName, lastName)
                 .Track("phone", client.Phone, phone)
+                .Track("identityCard", client.IdentityCard, identityCard)
                 .Track("street", client.Street, street)
                 .Track("city", client.City, city)
                 .Track("province", client.Province, province)
@@ -193,6 +197,7 @@ namespace API.Furnistore.Application.Admin.Customers
                 client.FirstName = firstName;
                 client.LastName = lastName;
                 client.Phone = phone;
+                client.IdentityCard = identityCard;
                 client.Street = street;
                 client.City = city;
                 client.Province = province;
@@ -214,6 +219,10 @@ namespace API.Furnistore.Application.Admin.Customers
                 catch (DbUpdateConcurrencyException)
                 {
                     return Result.Fail<AdminCustomerResponse>(VersionConflict(id, actorUserId));
+                }
+                catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exception))
+                {
+                    return Result.Fail<AdminCustomerResponse>(ClientService.IdentityCardTaken());
                 }
 
                 logger.LogInformation(ApiEvents.ClientUpdated, "Client {ClientId} updated by {UserId}", id, actorUserId);

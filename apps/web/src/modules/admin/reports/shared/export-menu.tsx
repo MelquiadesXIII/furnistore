@@ -37,24 +37,24 @@ export function ExportMenu({
   slug,
   period,
   groupBy,
-  tables,
+  table,
 }: {
   slug: ReportSlug;
   period: { from: string; to: string } | null;
   groupBy: ReportGrouping | null;
-  tables: { id: string; title: string }[];
+  table: { id: string; title: string } | null;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function href(target: string, format: "pdf" | "csv", table?: string): string {
+  function href(target: string, format: "pdf" | "csv", tableId?: string): string {
     const params = new URLSearchParams();
     if (period) {
       params.set("from", period.from);
       params.set("to", period.to);
     }
     if (groupBy) params.set("groupBy", groupBy);
-    if (table) params.set("table", table);
+    if (tableId) params.set("table", tableId);
     return `/admin/reports/${target}/${format}?${params.toString()}`;
   }
 
@@ -88,7 +88,7 @@ export function ExportMenu({
             {pending ?? "Exportar"}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>PDF</DropdownMenuLabel>
           <DropdownMenuItem
             onSelect={() =>
@@ -96,37 +96,24 @@ export function ExportMenu({
             }
           >
             <FileText />
-            Este reporte
+            Descargar PDF
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>CSV</DropdownMenuLabel>
           <DropdownMenuItem
+            disabled={!table}
             onSelect={() =>
+              table &&
               run({
-                href: href("all", "pdf"),
-                label: "Generando informe…",
-                fallbackName: "furnistore-informe-completo.pdf",
+                href: href(slug, "csv", table.id),
+                label: "Preparando CSV…",
+                fallbackName: `furnistore-${slug}.csv`,
               })
             }
           >
-            <FileText />
-            Informe completo (los 6 reportes)
+            <FileSpreadsheet />
+            Descargar tabla en CSV
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>CSV para Excel</DropdownMenuLabel>
-          {tables.map((table) => (
-            <DropdownMenuItem
-              key={table.id}
-              onSelect={() =>
-                run({
-                  href: href(slug, "csv", table.id),
-                  label: "Preparando CSV…",
-                  fallbackName: `furnistore-${slug}-${table.id}.csv`,
-                })
-              }
-            >
-              <FileSpreadsheet />
-              {table.title}
-            </DropdownMenuItem>
-          ))}
         </DropdownMenuContent>
       </DropdownMenu>
       {error && (

@@ -13,8 +13,6 @@ const MOMENT = new Intl.DateTimeFormat("sv-SE", {
 const UNITS: Partial<Record<CellKind, string>> = {
   money: "USD",
   percent: "%",
-  hours: "horas",
-  days: "días",
 };
 
 function header(column: { header: string; kind: CellKind }): string {

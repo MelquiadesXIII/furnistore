@@ -3,15 +3,14 @@ import "server-only";
 import { ok, type Result } from "@/lib/result";
 import { getReport, type ReportData } from "@/modules/admin/reports/api";
 import type { ReportSlug } from "@/modules/admin/reports/definitions";
-import { tablesOf, type ReportBlock } from "@/modules/admin/reports/document";
 import type { ReportTableData } from "@/modules/admin/reports/tables/table-spec";
 import type { ReportQuery } from "@/modules/admin/reports/types";
-import { cancellationsDocument } from "@/modules/admin/reports/views/cancellations/cancellations-document";
-import { customersDocument } from "@/modules/admin/reports/views/customers/customers-document";
-import { inventoryDocument } from "@/modules/admin/reports/views/inventory/inventory-document";
-import { operationsDocument } from "@/modules/admin/reports/views/operations/operations-document";
-import { productsDocument } from "@/modules/admin/reports/views/products/products-document";
-import { salesDocument } from "@/modules/admin/reports/views/sales/sales-document";
+import { cancellationsTable } from "@/modules/admin/reports/views/cancellations/cancellations-table";
+import { customersTable } from "@/modules/admin/reports/views/customers/customers-table";
+import { inventoryTable } from "@/modules/admin/reports/views/inventory/inventory-table";
+import { operationsTable } from "@/modules/admin/reports/views/operations/operations-table";
+import { productsTable } from "@/modules/admin/reports/views/products/products-table";
+import { salesTable } from "@/modules/admin/reports/views/sales/sales-table";
 
 export type LoadedReport = { [S in ReportSlug]: { slug: S; data: ReportData[S] } }[ReportSlug];
 
@@ -20,23 +19,19 @@ export async function loadReport(slug: ReportSlug, query: ReportQuery): Promise<
   return result.ok ? ok({ slug, data: result.value } as LoadedReport) : result;
 }
 
-export function reportDocument(report: LoadedReport): ReportBlock[] {
+export function reportTable(report: LoadedReport): ReportTableData {
   switch (report.slug) {
     case "sales":
-      return salesDocument(report.data);
+      return salesTable(report.data);
     case "products":
-      return productsDocument(report.data);
+      return productsTable(report.data);
     case "operations":
-      return operationsDocument(report.data);
+      return operationsTable(report.data);
     case "cancellations":
-      return cancellationsDocument(report.data);
+      return cancellationsTable(report.data);
     case "inventory":
-      return inventoryDocument(report.data);
+      return inventoryTable(report.data);
     case "customers":
-      return customersDocument(report.data);
+      return customersTable(report.data);
   }
-}
-
-export function reportTables(report: LoadedReport): ReportTableData[] {
-  return tablesOf(reportDocument(report));
 }

@@ -37,13 +37,9 @@ namespace API.Furnistore.Application.Admin.Reports
     {
         public const int MaxDays = 1096;
 
-        public int Days => To.DayNumber - From.DayNumber + 1;
-
         public DateTime StartUtc => StoreCalendar.StartOfDayUtc(From);
 
         public DateTime EndUtc => StoreCalendar.StartOfDayUtc(To.AddDays(1));
-
-        public ReportPeriod Previous => this with { From = From.AddDays(-Days), To = From.AddDays(-1) };
 
         public ReportRange Range => new(From, To);
 
@@ -118,27 +114,8 @@ namespace API.Furnistore.Application.Admin.Reports
 
     public static class ReportMath
     {
-        public static decimal? Change(decimal current, decimal previous) =>
-            previous == 0 ? null : Math.Round((current - previous) / previous, 4);
-
         public static decimal Share(decimal part, decimal total) => total == 0 ? 0 : Math.Round(part / total, 4);
 
         public static decimal Average(decimal total, int count) => count == 0 ? 0 : Math.Round(total / count, 2);
-
-        public static ReportMetric Metric(decimal current, decimal previous) =>
-            new(current, previous, Change(current, previous));
-
-        public static decimal? Median(IReadOnlyList<double> values)
-        {
-            if (values.Count == 0)
-                return null;
-            var sorted = values.Order().ToList();
-            var middle = sorted.Count / 2;
-            var median = sorted.Count % 2 == 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-            return Math.Round((decimal)median, 1);
-        }
-
-        public static decimal? Mean(IReadOnlyList<double> values) =>
-            values.Count == 0 ? null : Math.Round((decimal)values.Average(), 1);
     }
 }

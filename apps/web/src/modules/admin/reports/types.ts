@@ -1,7 +1,6 @@
 import type { ApiSchemas } from "@/lib/api/contract";
 
 export type ReportMeta = ApiSchemas["ReportMeta"];
-export type ReportMetric = ApiSchemas["ReportMetric"];
 export type ReportGrouping = ApiSchemas["ReportGrouping"];
 export type ReportKind = ApiSchemas["ReportKind"];
 export type ReportFormat = ApiSchemas["ReportFormat"];

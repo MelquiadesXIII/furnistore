@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getSession, getSessionUser } from "@/lib/session";
 import { recordReportExport } from "@/modules/admin/reports/api";
-import { exportFileName, exportKind, type ExportTarget } from "@/modules/admin/reports/definitions";
+import { REPORTS, type ReportSlug } from "@/modules/admin/reports/definitions";
 import type { ReportFormat } from "@/modules/admin/reports/types";
 
 export async function adminExportSession(): Promise<{ token: string; email: string } | null> {
@@ -16,7 +16,7 @@ export function exportError(status: number, message: string): NextResponse {
 }
 
 export async function exportFile(input: {
-  target: ExportTarget;
+  slug: ReportSlug;
   format: ReportFormat;
   table?: string;
   from: string;
@@ -25,19 +25,18 @@ export async function exportFile(input: {
   contentType: string;
 }): Promise<NextResponse> {
   const recorded = await recordReportExport({
-    report: exportKind(input.target),
+    report: REPORTS[input.slug].kind,
     format: input.format,
     table: input.table,
     from: input.from,
     to: input.to,
   });
   if (!recorded.ok) {
-    console.error(`[reports] No se pudo registrar la exportación de ${input.target}`, recorded.error);
+    console.error(`[reports] No se pudo registrar la exportación de ${input.slug}`, recorded.error);
   }
 
   const extension = input.format === "Pdf" ? "pdf" : "csv";
-  const parts = ["furnistore", exportFileName(input.target), input.table, `${input.from}_${input.to}`];
-  const fileName = `${parts.filter(Boolean).join("-")}.${extension}`;
+  const fileName = `furnistore-${REPORTS[input.slug].fileName}-${input.from}_${input.to}.${extension}`;
 
   return new NextResponse(input.body, {
     headers: {

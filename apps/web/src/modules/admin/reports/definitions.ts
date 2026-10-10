@@ -13,14 +13,13 @@ export const REPORT_GROUPINGS = ["Day", "Week", "Month"] as const;
 
 export type ReportSlug = (typeof REPORT_SLUGS)[number];
 
-export type ExportTarget = ReportSlug | "all";
-
 export type ReportDefinition = {
   kind: ReportKind;
   title: string;
   fileName: string;
   summary: string;
-  hasSeries: boolean;
+  usesPeriod: boolean;
+  hasGrouping: boolean;
 };
 
 export const REPORTS: Record<ReportSlug, ReportDefinition> = {
@@ -28,64 +27,52 @@ export const REPORTS: Record<ReportSlug, ReportDefinition> = {
     kind: "Sales",
     title: "Ventas",
     fileName: "ventas",
-    summary: "Ingresos, pedidos, ticket promedio y unidades, comparados con el período anterior.",
-    hasSeries: true,
+    summary: "Cuánto se vendió en el período.",
+    usesPeriod: true,
+    hasGrouping: true,
   },
   products: {
     kind: "Products",
-    title: "Productos y categorías",
+    title: "Productos",
     fileName: "productos",
-    summary: "Qué se vende, cuánto pesa cada categoría y qué muebles no se mueven.",
-    hasSeries: true,
+    summary: "Qué productos se vendieron más.",
+    usesPeriod: true,
+    hasGrouping: false,
   },
   operations: {
     kind: "Operations",
-    title: "Operación y entregas",
+    title: "Operación",
     fileName: "operacion",
-    summary: "Estados de los pedidos, tiempos de cada etapa y entregas a tiempo.",
-    hasSeries: false,
+    summary: "Estado de los pedidos y entregas.",
+    usesPeriod: true,
+    hasGrouping: false,
   },
   cancellations: {
     kind: "Cancellations",
     title: "Cancelaciones",
     fileName: "cancelaciones",
-    summary: "Cuántos pedidos se cancelan, quién los cancela, en qué etapa y por qué.",
-    hasSeries: false,
+    summary: "Pedidos cancelados y quién los canceló.",
+    usesPeriod: true,
+    hasGrouping: false,
   },
   inventory: {
     kind: "Inventory",
     title: "Inventario",
     fileName: "inventario",
-    summary: "Stock actual, valor del inventario y qué se va a agotar al ritmo de venta del período.",
-    hasSeries: false,
+    summary: "Stock actual de los productos activos.",
+    usesPeriod: false,
+    hasGrouping: false,
   },
   customers: {
     kind: "Customers",
-    title: "Clientes y zonas",
+    title: "Clientes",
     fileName: "clientes",
-    summary: "Compradores nuevos y recurrentes, mejores clientes y ventas por provincia y ciudad.",
-    hasSeries: true,
+    summary: "Quiénes compraron y desde dónde.",
+    usesPeriod: true,
+    hasGrouping: false,
   },
 };
 
-export const FULL_REPORT_TITLE = "Informe completo";
-
 export function isReportSlug(value: string): value is ReportSlug {
   return (REPORT_SLUGS as readonly string[]).includes(value);
-}
-
-export function isExportTarget(value: string): value is ExportTarget {
-  return value === "all" || isReportSlug(value);
-}
-
-export function exportTitle(target: ExportTarget): string {
-  return target === "all" ? FULL_REPORT_TITLE : REPORTS[target].title;
-}
-
-export function exportFileName(target: ExportTarget): string {
-  return target === "all" ? "informe-completo" : REPORTS[target].fileName;
-}
-
-export function exportKind(target: ExportTarget): ReportKind {
-  return target === "all" ? "All" : REPORTS[target].kind;
 }

@@ -3745,16 +3745,6 @@ export interface components {
             token: string;
             refreshToken: string;
         };
-        BuyersPoint: {
-            /** Format: date */
-            start: string;
-            /** Format: date */
-            end: string;
-            /** Format: int32 */
-            newBuyers: number;
-            /** Format: int32 */
-            returningBuyers: number;
-        };
         CancelOrderRequest: {
             reason: string | null;
         };
@@ -3765,32 +3755,17 @@ export interface components {
             /** Format: int32 */
             orders: number;
             /** Format: double */
-            revenue: number;
-            /** Format: double */
-            share: number;
-        };
-        CancellationReasonRow: {
-            reason: string | null;
-            /** Format: int32 */
-            orders: number;
-            /** Format: double */
-            share: number;
-        };
-        CancellationStageRow: {
-            stage: components["schemas"]["OrderStatus"] | null;
-            /** Format: int32 */
-            orders: number;
-            /** Format: double */
             share: number;
         };
         CancellationsReport: {
             meta: components["schemas"]["ReportMeta"];
-            cancelled: components["schemas"]["ReportMetric"];
-            rate: components["schemas"]["ReportMetric"];
-            lostRevenue: components["schemas"]["ReportMetric"];
+            /** Format: int32 */
+            cancelled: number;
+            /** Format: double */
+            rate: number;
+            /** Format: double */
+            lostRevenue: number;
             byActor: components["schemas"]["CancellationActorRow"][];
-            byStage: components["schemas"]["CancellationStageRow"][];
-            reasons: components["schemas"]["CancellationReasonRow"][];
             orders: components["schemas"]["CancelledOrderRow"][];
         };
         CancelledOrderRow: {
@@ -3800,11 +3775,8 @@ export interface components {
             orderNumber: number;
             customer: string;
             /** Format: date-time */
-            placedAt: string;
-            /** Format: date-time */
             cancelledAt: string | null;
             cancelledBy: components["schemas"]["CancellationActor"];
-            stage: components["schemas"]["OrderStatus"] | null;
             reason: string | null;
             /** Format: double */
             total: number;
@@ -3832,32 +3804,6 @@ export interface components {
             shippingCost: number;
             /** Format: double */
             total: number;
-        };
-        CategoryAmount: {
-            /** Format: int32 */
-            categoryId: number;
-            /** Format: double */
-            revenue: number;
-        };
-        CategorySalesRow: {
-            /** Format: int32 */
-            categoryId: number;
-            name: string;
-            /** Format: int32 */
-            units: number;
-            /** Format: int32 */
-            orders: number;
-            /** Format: double */
-            revenue: number;
-            /** Format: double */
-            share: number;
-        };
-        CategorySeriesPoint: {
-            /** Format: date */
-            start: string;
-            /** Format: date */
-            end: string;
-            categories: components["schemas"]["CategoryAmount"][];
         };
         CheckoutRequest: {
             /** Format: double */
@@ -3897,37 +3843,17 @@ export interface components {
         CustomerFilter: "All" | "Admins" | "Disabled" | "LockedOut" | "Unconfirmed";
         CustomersReport: {
             meta: components["schemas"]["ReportMeta"];
-            buyers: components["schemas"]["ReportMetric"];
-            newBuyers: components["schemas"]["ReportMetric"];
-            returningBuyers: components["schemas"]["ReportMetric"];
-            revenuePerBuyer: components["schemas"]["ReportMetric"];
-            series: components["schemas"]["BuyersPoint"][];
+            /** Format: int32 */
+            buyers: number;
+            /** Format: int32 */
+            newBuyers: number;
+            /** Format: int32 */
+            returningBuyers: number;
+            provinces: components["schemas"]["ProvinceRow"][];
             topCustomers: components["schemas"]["TopCustomerRow"][];
-            provinces: components["schemas"]["RegionRow"][];
-            cities: components["schemas"]["RegionRow"][];
-        };
-        /** @enum {string} */
-        FulfillmentStage: "Queue" | "Preparation" | "Transit" | "Total";
-        InventoryCategoryRow: {
-            /** Format: int32 */
-            categoryId: number;
-            name: string;
-            /** Format: int32 */
-            products: number;
-            /** Format: int32 */
-            units: number;
-            /** Format: double */
-            value: number;
-            /** Format: double */
-            share: number;
         };
         InventoryReport: {
             meta: components["schemas"]["ReportMeta"];
-            summary: components["schemas"]["InventorySummary"];
-            categories: components["schemas"]["InventoryCategoryRow"][];
-            products: components["schemas"]["StockRow"][];
-        };
-        InventorySummary: {
             /** Format: int32 */
             activeProducts: number;
             /** Format: int32 */
@@ -3936,14 +3862,11 @@ export interface components {
             lowStock: number;
             /** Format: int32 */
             healthy: number;
-            /** Format: int32 */
-            units: number;
             /** Format: double */
             value: number;
             /** Format: int32 */
             lowStockThreshold: number;
-            /** Format: int32 */
-            coverAlertDays: number;
+            products: components["schemas"]["StockRow"][];
         };
         LoginRequest: {
             /** Format: email */
@@ -3953,25 +3876,17 @@ export interface components {
         LogoutRequest: {
             refreshToken: string;
         };
-        OnTimeSummary: {
-            /** Format: int32 */
-            delivered: number;
-            /** Format: int32 */
-            onTime: number;
-            /** Format: int32 */
-            late: number;
-            /** Format: double */
-            onTimeRate: number | null;
-            /** Format: double */
-            averageDaysLate: number | null;
-        };
         OperationsReport: {
             meta: components["schemas"]["ReportMeta"];
             /** Format: int32 */
             orders: number;
+            /** Format: int32 */
+            delivered: number;
+            /** Format: int32 */
+            deliveredOnTime: number;
+            /** Format: double */
+            onTimeRate: number | null;
             statuses: components["schemas"]["StatusCountRow"][];
-            stages: components["schemas"]["StageDurationRow"][];
-            onTime: components["schemas"]["OnTimeSummary"];
             overdue: components["schemas"]["OverdueOrderRow"][];
         };
         OrderLineResponse: {
@@ -4042,8 +3957,6 @@ export interface components {
             orderNumber: number;
             status: components["schemas"]["OrderStatus"];
             customer: string;
-            /** Format: date-time */
-            placedAt: string;
             /** Format: date */
             estimatedDeliveryDate: string;
             /** Format: int32 */
@@ -4117,39 +4030,29 @@ export interface components {
             category: string;
             /** Format: int32 */
             units: number;
-            /** Format: int32 */
-            orders: number;
             /** Format: double */
             revenue: number;
             /** Format: double */
             share: number;
-            /** Format: double */
-            averageUnitPrice: number;
         };
         ProductsReport: {
             meta: components["schemas"]["ReportMeta"];
             /** Format: double */
             revenue: number;
+            /** Format: int32 */
+            unsoldProducts: number;
             products: components["schemas"]["ProductSalesRow"][];
-            categories: components["schemas"]["CategorySalesRow"][];
-            categorySeries: components["schemas"]["CategorySeriesPoint"][];
-            unsold: components["schemas"]["UnsoldProductRow"][];
+        };
+        ProvinceRow: {
+            name: string;
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            revenue: number;
         };
         RefreshTokenRequest: {
             token: string;
             refreshToken: string;
-        };
-        RegionRow: {
-            name: string;
-            province: string | null;
-            /** Format: int32 */
-            orders: number;
-            /** Format: int32 */
-            buyers: number;
-            /** Format: double */
-            revenue: number;
-            /** Format: double */
-            share: number;
         };
         RegisterRequest: {
             firstName: string;
@@ -4175,24 +4078,14 @@ export interface components {
         /** @enum {string} */
         ReportGrouping: "Day" | "Week" | "Month";
         /** @enum {string} */
-        ReportKind: "Sales" | "Products" | "Operations" | "Cancellations" | "Inventory" | "Customers" | "All";
+        ReportKind: "Sales" | "Products" | "Operations" | "Cancellations" | "Inventory" | "Customers";
         ReportMeta: {
             period: components["schemas"]["ReportRange"];
-            previousPeriod: components["schemas"]["ReportRange"];
             groupBy: components["schemas"]["ReportGrouping"];
             availableGroupings: components["schemas"]["ReportGrouping"][];
             currency: string;
-            timeZone: string;
             /** Format: date-time */
             generatedAt: string;
-        };
-        ReportMetric: {
-            /** Format: double */
-            value: number;
-            /** Format: double */
-            previous: number;
-            /** Format: double */
-            change: number | null;
         };
         ReportRange: {
             /** Format: date */
@@ -4215,23 +4108,18 @@ export interface components {
             orders: number;
             /** Format: int32 */
             units: number;
-            /** Format: double */
-            averageOrderValue: number;
-            /** Format: double */
-            previousRevenue: number | null;
-            /** Format: int32 */
-            previousOrders: number | null;
         };
         SalesReport: {
             meta: components["schemas"]["ReportMeta"];
-            summary: components["schemas"]["SalesSummary"];
+            /** Format: double */
+            revenue: number;
+            /** Format: int32 */
+            orders: number;
+            /** Format: double */
+            averageOrderValue: number;
+            /** Format: int32 */
+            units: number;
             series: components["schemas"]["SalesPoint"][];
-        };
-        SalesSummary: {
-            revenue: components["schemas"]["ReportMetric"];
-            orders: components["schemas"]["ReportMetric"];
-            averageOrderValue: components["schemas"]["ReportMetric"];
-            units: components["schemas"]["ReportMetric"];
         };
         SaveCategoryRequest: {
             name: string;
@@ -4242,21 +4130,10 @@ export interface components {
             province: string;
             deliveryNotes?: string | null;
         };
-        StageDurationRow: {
-            stage: components["schemas"]["FulfillmentStage"];
-            /** Format: int32 */
-            orders: number;
-            /** Format: double */
-            averageHours: number | null;
-            /** Format: double */
-            medianHours: number | null;
-        };
         StatusCountRow: {
             status: components["schemas"]["OrderStatus"];
             /** Format: int32 */
             orders: number;
-            /** Format: double */
-            share: number;
         };
         /** @enum {string} */
         StockLevel: "OutOfStock" | "Low" | "Healthy";
@@ -4271,12 +4148,6 @@ export interface components {
             price: number;
             /** Format: double */
             value: number;
-            /** Format: int32 */
-            unitsSold: number;
-            /** Format: double */
-            dailyUnits: number;
-            /** Format: double */
-            daysOfCover: number | null;
             level: components["schemas"]["StockLevel"];
         };
         TopCustomerRow: {
@@ -4288,22 +4159,6 @@ export interface components {
             orders: number;
             /** Format: double */
             revenue: number;
-            /** Format: double */
-            share: number;
-            /** Format: date-time */
-            lastOrderAt: string;
-        };
-        UnsoldProductRow: {
-            /** Format: int32 */
-            productId: number;
-            name: string;
-            category: string;
-            /** Format: double */
-            price: number;
-            /** Format: int32 */
-            stock: number;
-            /** Format: date-time */
-            lastSoldAt: string | null;
         };
         UpdateCartItemRequest: {
             /** Format: int32 */

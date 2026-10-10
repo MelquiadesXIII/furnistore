@@ -6204,28 +6204,6 @@
         },
         "additionalProperties": false
       },
-      "BuyersPoint": {
-        "type": "object",
-        "properties": {
-          "start": {
-            "type": "string",
-            "format": "date"
-          },
-          "end": {
-            "type": "string",
-            "format": "date"
-          },
-          "newBuyers": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "returningBuyers": {
-            "type": "integer",
-            "format": "int32"
-          }
-        },
-        "additionalProperties": false
-      },
       "CancelOrderRequest": {
         "type": "object",
         "properties": {
@@ -6260,50 +6238,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "revenue": {
-            "type": "number",
-            "format": "double"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CancellationReasonRow": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "nullable": true
-          },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CancellationStageRow": {
-        "type": "object",
-        "properties": {
-          "stage": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OrderStatus"
-              }
-            ],
-            "nullable": true
-          },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
           "share": {
             "type": "number",
             "format": "double"
@@ -6322,42 +6256,21 @@
             ]
           },
           "cancelled": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "integer",
+            "format": "int32"
           },
           "rate": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "number",
+            "format": "double"
           },
           "lostRevenue": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "number",
+            "format": "double"
           },
           "byActor": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CancellationActorRow"
-            }
-          },
-          "byStage": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CancellationStageRow"
-            }
-          },
-          "reasons": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CancellationReasonRow"
             }
           },
           "orders": {
@@ -6383,10 +6296,6 @@
           "customer": {
             "type": "string"
           },
-          "placedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
           "cancelledAt": {
             "type": "string",
             "format": "date-time",
@@ -6398,14 +6307,6 @@
                 "$ref": "#/components/schemas/CancellationActor"
               }
             ]
-          },
-          "stage": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OrderStatus"
-              }
-            ],
-            "nullable": true
           },
           "reason": {
             "type": "string",
@@ -6474,69 +6375,6 @@
           "total": {
             "type": "number",
             "format": "double"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CategoryAmount": {
-        "type": "object",
-        "properties": {
-          "categoryId": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "revenue": {
-            "type": "number",
-            "format": "double"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CategorySalesRow": {
-        "type": "object",
-        "properties": {
-          "categoryId": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "units": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "revenue": {
-            "type": "number",
-            "format": "double"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CategorySeriesPoint": {
-        "type": "object",
-        "properties": {
-          "start": {
-            "type": "string",
-            "format": "date"
-          },
-          "end": {
-            "type": "string",
-            "format": "date"
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategoryAmount"
-            }
           }
         },
         "additionalProperties": false
@@ -6683,37 +6521,21 @@
             ]
           },
           "buyers": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "integer",
+            "format": "int32"
           },
           "newBuyers": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "integer",
+            "format": "int32"
           },
           "returningBuyers": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
+            "type": "integer",
+            "format": "int32"
           },
-          "revenuePerBuyer": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
-          },
-          "series": {
+          "provinces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BuyersPoint"
+              "$ref": "#/components/schemas/ProvinceRow"
             }
           },
           "topCustomers": {
@@ -6721,56 +6543,6 @@
             "items": {
               "$ref": "#/components/schemas/TopCustomerRow"
             }
-          },
-          "provinces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RegionRow"
-            }
-          },
-          "cities": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RegionRow"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "FulfillmentStage": {
-        "enum": [
-          "Queue",
-          "Preparation",
-          "Transit",
-          "Total"
-        ],
-        "type": "string"
-      },
-      "InventoryCategoryRow": {
-        "type": "object",
-        "properties": {
-          "categoryId": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "products": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "units": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "value": {
-            "type": "number",
-            "format": "double"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
           }
         },
         "additionalProperties": false
@@ -6785,31 +6557,6 @@
               }
             ]
           },
-          "summary": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/InventorySummary"
-              }
-            ]
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/InventoryCategoryRow"
-            }
-          },
-          "products": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StockRow"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "InventorySummary": {
-        "type": "object",
-        "properties": {
           "activeProducts": {
             "type": "integer",
             "format": "int32"
@@ -6826,10 +6573,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "units": {
-            "type": "integer",
-            "format": "int32"
-          },
           "value": {
             "type": "number",
             "format": "double"
@@ -6838,9 +6581,11 @@
             "type": "integer",
             "format": "int32"
           },
-          "coverAlertDays": {
-            "type": "integer",
-            "format": "int32"
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockRow"
+            }
           }
         },
         "additionalProperties": false
@@ -6879,34 +6624,6 @@
         },
         "additionalProperties": false
       },
-      "OnTimeSummary": {
-        "type": "object",
-        "properties": {
-          "delivered": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "onTime": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "late": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "onTimeRate": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "averageDaysLate": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
       "OperationsReport": {
         "type": "object",
         "properties": {
@@ -6921,24 +6638,24 @@
             "type": "integer",
             "format": "int32"
           },
+          "delivered": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deliveredOnTime": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "onTimeRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
           "statuses": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/StatusCountRow"
             }
-          },
-          "stages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StageDurationRow"
-            }
-          },
-          "onTime": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OnTimeSummary"
-              }
-            ]
           },
           "overdue": {
             "type": "array",
@@ -7143,10 +6860,6 @@
           "customer": {
             "type": "string"
           },
-          "placedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
           "estimatedDeliveryDate": {
             "type": "string",
             "format": "date"
@@ -7342,19 +7055,11 @@
             "type": "integer",
             "format": "int32"
           },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
           "revenue": {
             "type": "number",
             "format": "double"
           },
           "share": {
-            "type": "number",
-            "format": "double"
-          },
-          "averageUnitPrice": {
             "type": "number",
             "format": "double"
           }
@@ -7375,29 +7080,32 @@
             "type": "number",
             "format": "double"
           },
+          "unsoldProducts": {
+            "type": "integer",
+            "format": "int32"
+          },
           "products": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ProductSalesRow"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProvinceRow": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
           },
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategorySalesRow"
-            }
+          "orders": {
+            "type": "integer",
+            "format": "int32"
           },
-          "categorySeries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategorySeriesPoint"
-            }
-          },
-          "unsold": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UnsoldProductRow"
-            }
+          "revenue": {
+            "type": "number",
+            "format": "double"
           }
         },
         "additionalProperties": false
@@ -7416,35 +7124,6 @@
           "refreshToken": {
             "minLength": 1,
             "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "RegionRow": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "province": {
-            "type": "string",
-            "nullable": true
-          },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "buyers": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "revenue": {
-            "type": "number",
-            "format": "double"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
           }
         },
         "additionalProperties": false
@@ -7554,8 +7233,7 @@
           "Operations",
           "Cancellations",
           "Inventory",
-          "Customers",
-          "All"
+          "Customers"
         ],
         "type": "string"
       },
@@ -7563,13 +7241,6 @@
         "type": "object",
         "properties": {
           "period": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportRange"
-              }
-            ]
-          },
-          "previousPeriod": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/ReportRange"
@@ -7592,31 +7263,9 @@
           "currency": {
             "type": "string"
           },
-          "timeZone": {
-            "type": "string"
-          },
           "generatedAt": {
             "type": "string",
             "format": "date-time"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ReportMetric": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "number",
-            "format": "double"
-          },
-          "previous": {
-            "type": "number",
-            "format": "double"
-          },
-          "change": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7672,20 +7321,6 @@
           "units": {
             "type": "integer",
             "format": "int32"
-          },
-          "averageOrderValue": {
-            "type": "number",
-            "format": "double"
-          },
-          "previousRevenue": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "previousOrders": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
           }
         },
         "additionalProperties": false
@@ -7700,52 +7335,27 @@
               }
             ]
           },
-          "summary": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SalesSummary"
-              }
-            ]
+          "revenue": {
+            "type": "number",
+            "format": "double"
+          },
+          "orders": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "averageOrderValue": {
+            "type": "number",
+            "format": "double"
+          },
+          "units": {
+            "type": "integer",
+            "format": "int32"
           },
           "series": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SalesPoint"
             }
-          }
-        },
-        "additionalProperties": false
-      },
-      "SalesSummary": {
-        "type": "object",
-        "properties": {
-          "revenue": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
-          },
-          "orders": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
-          },
-          "averageOrderValue": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
-          },
-          "units": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReportMetric"
-              }
-            ]
           }
         },
         "additionalProperties": false
@@ -7796,33 +7406,6 @@
         },
         "additionalProperties": false
       },
-      "StageDurationRow": {
-        "type": "object",
-        "properties": {
-          "stage": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/FulfillmentStage"
-              }
-            ]
-          },
-          "orders": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "averageHours": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "medianHours": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          }
-        },
-        "additionalProperties": false
-      },
       "StatusCountRow": {
         "type": "object",
         "properties": {
@@ -7836,10 +7419,6 @@
           "orders": {
             "type": "integer",
             "format": "int32"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
           }
         },
         "additionalProperties": false
@@ -7877,19 +7456,6 @@
             "type": "number",
             "format": "double"
           },
-          "unitsSold": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "dailyUnits": {
-            "type": "number",
-            "format": "double"
-          },
-          "daysOfCover": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
           "level": {
             "allOf": [
               {
@@ -7920,43 +7486,6 @@
           "revenue": {
             "type": "number",
             "format": "double"
-          },
-          "share": {
-            "type": "number",
-            "format": "double"
-          },
-          "lastOrderAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "additionalProperties": false
-      },
-      "UnsoldProductRow": {
-        "type": "object",
-        "properties": {
-          "productId": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "category": {
-            "type": "string"
-          },
-          "price": {
-            "type": "number",
-            "format": "double"
-          },
-          "stock": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "lastSoldAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
           }
         },
         "additionalProperties": false

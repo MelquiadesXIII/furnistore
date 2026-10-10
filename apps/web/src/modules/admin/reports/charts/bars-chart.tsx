@@ -3,45 +3,40 @@
 import { Bar, BarChart, CartesianGrid, LabelList, Rectangle, XAxis, YAxis, type BarShapeProps } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { ReportTooltip } from "@/modules/admin/reports/charts/chart-tooltip";
-import { toneColor } from "@/modules/admin/reports/charts/palette";
-import type { ChartSpec } from "@/modules/admin/reports/document";
-import { formatAxisValue, formatValue } from "@/modules/admin/reports/format";
+import { formatAxisValue, formatValue, type ValueKind } from "@/modules/admin/reports/format";
 
-const LABEL_LIMIT = 24;
-
-function truncate(text: string): string {
-  return text.length > LABEL_LIMIT ? `${text.slice(0, LABEL_LIMIT - 1)}…` : text;
-}
+export type BarItem = { label: string; value: number; color?: string };
 
 function ColoredBar(props: BarShapeProps) {
-  const fill = (props.payload as { fill?: string } | undefined)?.fill ?? props.fill;
+  const fill = (props.payload as BarItem | undefined)?.color ?? props.fill;
   return <Rectangle {...props} fill={fill} />;
 }
 
-export function BarsChart({ spec }: { spec: Extract<ChartSpec, { kind: "bars" }> }) {
-  const config = { value: { label: spec.valueLabel, color: toneColor("chart-1") } } satisfies ChartConfig;
-  const data = spec.items.map((item) => ({ label: item.label, value: item.value, fill: toneColor(item.tone) }));
-  const horizontal = spec.layout === "horizontal";
-  const height = horizontal ? Math.max(120, spec.items.length * 34 + 16) : 240;
+export function ReportBarsChart({
+  items,
+  kind,
+  label,
+  horizontal = false,
+}: {
+  items: BarItem[];
+  kind: ValueKind;
+  label: string;
+  horizontal?: boolean;
+}) {
+  const config = { value: { label, color: "var(--chart-1)" } } satisfies ChartConfig;
+  const height = horizontal ? Math.max(120, items.length * 34) : 240;
 
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height }}>
       <BarChart
-        data={data}
+        data={items}
         layout={horizontal ? "vertical" : "horizontal"}
         margin={horizontal ? { top: 0, right: 96, left: 0, bottom: 0 } : { top: 20, right: 8, left: 0, bottom: 0 }}
       >
         {horizontal ? (
           <>
             <XAxis type="number" hide />
-            <YAxis
-              type="category"
-              dataKey="label"
-              width={160}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(value) => truncate(String(value))}
-            />
+            <YAxis type="category" dataKey="label" width={160} tickLine={false} axisLine={false} />
           </>
         ) : (
           <>
@@ -51,24 +46,18 @@ export function BarsChart({ spec }: { spec: Extract<ChartSpec, { kind: "bars" }>
               tickLine={false}
               axisLine={false}
               width={60}
-              tickFormatter={(value) => formatAxisValue(spec.valueKind, Number(value))}
+              tickFormatter={(value) => formatAxisValue(kind, Number(value))}
             />
           </>
         )}
-        <ChartTooltip cursor={false} content={(props) => <ReportTooltip {...props} kind={spec.valueKind} />} />
-        <Bar
-          dataKey="value"
-          name={spec.valueLabel}
-          shape={ColoredBar}
-          radius={horizontal ? [0, 2, 2, 0] : [2, 2, 0, 0]}
-          maxBarSize={horizontal ? 22 : 48}
-        >
+        <ChartTooltip cursor={false} content={(props) => <ReportTooltip {...props} kind={kind} />} />
+        <Bar dataKey="value" name={label} fill="var(--color-value)" shape={ColoredBar} maxBarSize={horizontal ? 22 : 48}>
           <LabelList
             dataKey="value"
             position={horizontal ? "right" : "top"}
-            className="fill-ink font-mono"
+            className="fill-ink"
             fontSize={11}
-            formatter={(value) => formatValue(spec.valueKind, Number(value))}
+            formatter={(value) => formatValue(kind, Number(value))}
           />
         </Bar>
       </BarChart>

@@ -1,4 +1,4 @@
-const STORE_TIME_ZONE = "America/Havana";
+export const STORE_TIME_ZONE = "America/Havana";
 
 const DAY = new Intl.DateTimeFormat("es", {
   day: "numeric",

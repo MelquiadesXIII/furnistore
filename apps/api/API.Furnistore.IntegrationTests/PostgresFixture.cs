@@ -3,6 +3,7 @@ using API.Furnistore.Application.Admin.Categories;
 using API.Furnistore.Application.Admin.Customers;
 using API.Furnistore.Application.Admin.Orders;
 using API.Furnistore.Application.Admin.Products;
+using API.Furnistore.Application.Admin.Reports;
 using API.Furnistore.Application.Carts;
 using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Orders;
@@ -80,6 +81,7 @@ namespace API.Furnistore.IntegrationTests
             collection.AddScoped<AdminProductService>();
             collection.AddScoped<AdminCategoryService>();
             collection.AddScoped<AdminCustomerService>();
+            collection.AddScoped<AdminReportService>();
             return collection.BuildServiceProvider();
         }
 

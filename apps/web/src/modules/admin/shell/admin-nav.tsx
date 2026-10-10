@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, FolderTree, History, LayoutDashboard, Package, Users } from "lucide-react";
+import { ChartColumn, ClipboardList, FolderTree, History, LayoutDashboard, Package, Users } from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/products", label: "Productos", icon: Package },
   { href: "/admin/categories", label: "Categorías", icon: FolderTree },
   { href: "/admin/customers", label: "Clientes", icon: Users },
+  { href: "/admin/reports", label: "Reportes", icon: ChartColumn },
   { href: "/admin/audit", label: "Auditoría", icon: History },
 ];
 

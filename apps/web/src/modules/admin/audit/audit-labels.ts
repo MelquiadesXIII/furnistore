@@ -1,4 +1,7 @@
+import { formatCalendarDate } from "@/lib/format-date";
 import type { AuditEntry } from "@/modules/admin/types";
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const FIELD_LABELS: Record<string, string> = {
   status: "Estado",
@@ -21,6 +24,10 @@ const FIELD_LABELS: Record<string, string> = {
   city: "Ciudad",
   province: "Provincia",
   deliveryNotes: "Indicaciones",
+  format: "Formato",
+  from: "Desde",
+  to: "Hasta",
+  table: "Tabla",
 };
 
 const VALUE_LABELS: Record<string, string> = {
@@ -31,6 +38,8 @@ const VALUE_LABELS: Record<string, string> = {
   Shipped: "Enviado",
   Delivered: "Entregado",
   Cancelled: "Cancelado",
+  Pdf: "PDF",
+  Csv: "CSV",
 };
 
 export function fieldLabel(field: string): string {
@@ -39,6 +48,7 @@ export function fieldLabel(field: string): string {
 
 export function valueLabel(value: string | null): string {
   if (value === null || value === "") return "—";
+  if (ISO_DAY.test(value)) return formatCalendarDate(value);
   return VALUE_LABELS[value] ?? value;
 }
 

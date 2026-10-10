@@ -15,6 +15,16 @@
   --accent-ink: #ffffff;
   --hairline: #ddd5c6;
   --brick: #a83a26;
+  --moss: #4f6b3a;
+
+  --chart-1: #8f6526;
+  --chart-2: #4f6b3a;
+  --chart-3: #3f6475;
+  --chart-4: #b9814a;
+  --chart-5: #7a4b6b;
+  --chart-6: #a83a26;
+  --chart-7: #8a8a4a;
+  --chart-8: #5b5049;
 
   --background: var(--surface);
   --foreground: var(--ink);
@@ -46,6 +56,16 @@
   --accent-ink: #211c16;
   --hairline: #3a3226;
   --brick: #e2664a;
+  --moss: #93b37a;
+
+  --chart-1: #d9a455;
+  --chart-2: #93b37a;
+  --chart-3: #7fb0c4;
+  --chart-4: #e8b98a;
+  --chart-5: #c08bb0;
+  --chart-6: #e2664a;
+  --chart-7: #c4c47e;
+  --chart-8: #b3a497;
 }
 
 @theme inline {
@@ -57,6 +77,7 @@
   --color-accent-ink: var(--accent-ink);
   --color-hairline: var(--hairline);
   --color-brick: var(--brick);
+  --color-moss: var(--moss);
 
   --font-display: var(--font-display-family), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-body-family), ui-sans-serif, system-ui, sans-serif;

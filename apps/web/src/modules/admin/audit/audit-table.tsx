@@ -11,6 +11,7 @@ const ENTITY_LINKS: Record<string, (id: string) => string> = {
   Product: (id) => `/admin/products/${id}`,
   Customer: (id) => `/admin/customers/${id}`,
   ProductCategory: () => "/admin/categories",
+  Report: (id) => (id === "All" ? "/admin/reports" : `/admin/reports/${id.toLowerCase()}`),
 };
 
 const columns: Column<AuditEntry>[] = [

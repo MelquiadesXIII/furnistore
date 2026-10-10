@@ -10,7 +10,7 @@ import { TablePagination } from "@/modules/admin/table/table-pagination";
 
 const loadParams = createLoader({
   page: parseAsInteger.withDefault(1),
-  entity: parseAsStringLiteral(["Order", "Product", "ProductCategory", "Customer"] as const),
+  entity: parseAsStringLiteral(["Order", "Product", "ProductCategory", "Customer", "Report"] as const),
 });
 
 export async function AuditContainer({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -33,6 +33,7 @@ export async function AuditContainer({ searchParams }: { searchParams: Promise<S
             { value: "Product", label: "Productos" },
             { value: "ProductCategory", label: "Categorías" },
             { value: "Customer", label: "Clientes" },
+            { value: "Report", label: "Reportes exportados" },
           ]}
         />
         {!result.ok ? (

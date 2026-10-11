@@ -20,7 +20,7 @@ export function CheckoutShipping({ account }: { account: Account }) {
           <h2 className="font-display text-xl font-semibold text-ink">Datos de envío</h2>
           {!complete && (
             <p className="text-sm text-ink-muted">
-              Necesitamos tu teléfono y dirección para entregarte el pedido.
+              Necesitamos tu teléfono, carnet de identidad y dirección para entregarte el pedido.
             </p>
           )}
         </div>
@@ -37,6 +37,7 @@ export function CheckoutShipping({ account }: { account: Account }) {
             <ShippingDetails
               name={`${account.firstName} ${account.lastName}`}
               phone={phone}
+              identityCard={account.identityCard}
               address={address}
             />
           ) : (

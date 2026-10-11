@@ -32,7 +32,7 @@ export function ProfileView({ account }: { account: Account }) {
           <p className="text-sm text-ink-muted">
             {account.isProfileComplete
               ? "Usamos estos datos para entregar tus pedidos."
-              : "Completa tu teléfono y dirección para poder hacer pedidos."}
+              : "Completa tu teléfono, carnet de identidad y dirección para poder hacer pedidos."}
           </p>
         </div>
 

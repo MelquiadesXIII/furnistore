@@ -36,6 +36,7 @@ export async function updateCustomer(
     firstName: values.firstName,
     lastName: values.lastName,
     phone: values.phone,
+    identityCard: values.identityCard,
     address: {
       street: values.street,
       city: values.city,

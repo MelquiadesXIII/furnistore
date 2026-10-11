@@ -100,6 +100,8 @@ export function CustomerView({ customer, isSelf }: { customer: AdminCustomer; is
               <dd className="font-mono">{customer.orderCount}</dd>
               <dt className="text-ink-muted">Total comprado</dt>
               <dd className="font-mono">{formatPrice(customer.totalSpent)}</dd>
+              <dt className="text-ink-muted">Carnet</dt>
+              <dd className="font-mono">{customer.identityCard ?? "—"}</dd>
               <dt className="text-ink-muted">Correo</dt>
               <dd>{account.emailConfirmed ? "Confirmado" : "Sin confirmar"}</dd>
               {account.lockedOutUntil && (

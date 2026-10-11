@@ -22,6 +22,7 @@ export async function saveAccount(
     firstName: values.firstName,
     lastName: values.lastName,
     phone: values.phone,
+    identityCard: values.identityCard,
     address: {
       street: values.street,
       city: values.city,
@@ -39,5 +40,10 @@ export async function saveAccount(
     redirect(`/login?next=${encodeURIComponent(safeNextPath(returnTo))}`);
   }
 
-  return { ok: false, message: accountErrorMessage(result.error), fieldErrors: {} };
+  const message = accountErrorMessage(result.error);
+  return {
+    ok: false,
+    message,
+    fieldErrors: result.error.code === "client.identity_card_taken" ? { identityCard: message } : {},
+  };
 }

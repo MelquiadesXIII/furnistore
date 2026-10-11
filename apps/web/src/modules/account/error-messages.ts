@@ -2,6 +2,7 @@ import { toUserMessage, type AppError } from "@/lib/errors";
 
 const ACCOUNT_MESSAGES: Record<string, string> = {
   "client.self_not_found": "Esta cuenta no tiene datos de cliente asociados.",
+  "client.identity_card_taken": "Ese carnet de identidad ya está registrado en otra cuenta.",
 };
 
 export function accountErrorMessage(error: AppError): string {

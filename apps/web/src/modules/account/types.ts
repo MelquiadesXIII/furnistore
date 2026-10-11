@@ -8,6 +8,7 @@ export type AccountField =
   | "firstName"
   | "lastName"
   | "phone"
+  | "identityCard"
   | "street"
   | "city"
   | "province"

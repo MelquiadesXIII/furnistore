@@ -3,10 +3,12 @@ import type { ShippingAddress } from "@/modules/account/types";
 export function ShippingDetails({
   name,
   phone,
+  identityCard,
   address,
 }: {
   name: string;
   phone: string;
+  identityCard?: string | null;
   address: ShippingAddress;
 }) {
   return (
@@ -17,6 +19,7 @@ export function ShippingDetails({
         {address.city}, {address.province}
       </span>
       <span className="text-ink-muted">{phone}</span>
+      {identityCard && <span className="text-ink-muted">CI {identityCard}</span>}
       {address.deliveryNotes && (
         <span className="mt-2 text-ink-muted">{address.deliveryNotes}</span>
       )}

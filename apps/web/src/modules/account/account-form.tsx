@@ -116,6 +116,23 @@ export function AccountForm({
       </Field>
 
       <Field
+        id="identityCard"
+        label="Carnet de identidad"
+        error={fieldErrors.identityCard}
+        hint="Los 11 dígitos, sin espacios. Por ejemplo: 05121467221."
+      >
+        <Input
+          {...fieldProps("identityCard", fieldErrors)}
+          type="text"
+          inputMode="numeric"
+          required
+          maxLength={11}
+          autoComplete="off"
+          defaultValue={account.identityCard ?? ""}
+        />
+      </Field>
+
+      <Field
         id="street"
         label="Dirección"
         error={fieldErrors.street}

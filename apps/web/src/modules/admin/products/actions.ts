@@ -7,6 +7,7 @@ import {
   createAdminProduct,
   deleteAdminProduct,
   updateAdminProduct,
+  uploadProductImage,
 } from "@/modules/admin/products/api";
 import { parseProductForm, type ProductFieldErrors } from "@/modules/admin/products/product-validation";
 
@@ -20,9 +21,24 @@ function isId(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+async function uploadImage(image: File, loginNext: string): Promise<string | ProductFormResult> {
+  const result = await uploadProductImage(image);
+  if (result.ok) return result.value.url;
+
+  if (result.error.kind === "unauthorized") redirect(`/login?next=${loginNext}`);
+  const message = adminErrorMessage(result.error);
+  return { ok: false, message, fieldErrors: { image: message } };
+}
+
 export async function createProduct(formData: FormData): Promise<ProductFormResult> {
-  const { input, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
+  const { input, image, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
   if (Object.keys(fieldErrors).length > 0) return { ok: false, message: INVALID, fieldErrors };
+
+  if (image) {
+    const uploaded = await uploadImage(image, "/admin/products/new");
+    if (typeof uploaded !== "string") return uploaded;
+    input.imageUrl = uploaded;
+  }
 
   const result = await createAdminProduct(input);
 
@@ -44,8 +60,14 @@ export async function updateProduct(
     return { ok: false, message: "Producto no válido.", fieldErrors: {} };
   }
 
-  const { input, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
+  const { input, image, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
   if (Object.keys(fieldErrors).length > 0) return { ok: false, message: INVALID, fieldErrors };
+
+  if (image) {
+    const uploaded = await uploadImage(image, `/admin/products/${id}`);
+    if (typeof uploaded !== "string") return uploaded;
+    input.imageUrl = uploaded;
+  }
 
   const result = await updateAdminProduct(id, { ...input, version });
 

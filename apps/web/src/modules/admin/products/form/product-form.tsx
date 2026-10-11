@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "cn";
-import { useState, useTransition, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProductFormResult } from "@/modules/admin/products/actions";
-import type { ProductField, ProductFieldErrors } from "@/modules/admin/products/product-validation";
+import {
+  IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  type ProductField,
+  type ProductFieldErrors,
+} from "@/modules/admin/products/product-validation";
 import type { AdminProduct } from "@/modules/admin/products/types";
 
 function Field({
@@ -54,6 +60,73 @@ function invalid(id: ProductField, errors: ProductFieldErrors) {
   return errors[id]
     ? { "aria-invalid": true as const, "aria-describedby": `${id}-error` }
     : {};
+}
+
+function ImagePicker({ current, error }: { current: string | null; error?: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [kept, setKept] = useState(current);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setLocalError(null);
+
+    if (file && (!IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES)) {
+      setLocalError("Elige una imagen JPG, PNG o WebP de hasta 5 MB.");
+      event.target.value = "";
+      setPreview(null);
+      return;
+    }
+
+    setPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function remove() {
+    setKept(null);
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  const shown = preview ?? kept;
+
+  return (
+    <Field id="image" label="Imagen (opcional)" error={localError ?? error} hint="JPG, PNG o WebP, hasta 5 MB.">
+      <div className="flex items-start gap-4">
+        <div className="relative size-28 shrink-0 overflow-hidden rounded-sm border border-hairline bg-surface">
+          {shown ? (
+            <Image src={shown} alt="Vista previa" fill sizes="112px" unoptimized className="object-cover" />
+          ) : (
+            <span className="flex h-full items-center justify-center text-xs text-ink-muted">Sin imagen</span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col items-start gap-2">
+          <Input
+            ref={inputRef}
+            id="image"
+            name="image"
+            type="file"
+            accept={IMAGE_TYPES.join(",")}
+            onChange={handleChange}
+            className="bg-surface-raised"
+            aria-invalid={localError || error ? true : undefined}
+          />
+          <input type="hidden" name="imageUrl" value={kept ?? ""} />
+          {shown && (
+            <Button type="button" variant="ghost" size="sm" onClick={remove}>
+              Quitar imagen
+            </Button>
+          )}
+        </div>
+      </div>
+    </Field>
+  );
 }
 
 export function ProductForm({
@@ -141,21 +214,7 @@ export function ProductForm({
         </Field>
       </div>
 
-      <Field
-        id="imageUrl"
-        label="Imagen (opcional)"
-        error={errors.imageUrl}
-        hint="URL pública del bucket de imágenes en Supabase."
-      >
-        <Input
-          id="imageUrl"
-          name="imageUrl"
-          type="url"
-          defaultValue={product?.imageUrl ?? ""}
-          className="bg-surface-raised"
-          {...invalid("imageUrl", errors)}
-        />
-      </Field>
+      <ImagePicker current={product?.imageUrl ?? null} error={errors.image} />
 
       <div className="grid gap-5 sm:grid-cols-4">
         <Field id="widthCm" label="Ancho (cm)" error={errors.widthCm}>

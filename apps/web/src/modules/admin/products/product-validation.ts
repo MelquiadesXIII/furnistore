@@ -6,7 +6,7 @@ export type ProductField =
   | "price"
   | "stock"
   | "productCategoryId"
-  | "imageUrl"
+  | "image"
   | "widthCm"
   | "depthCm"
   | "heightCm"
@@ -19,6 +19,9 @@ type ProductInput = ApiSchemas["CreateProductRequest"];
 const PRICE_PATTERN = /^\d{1,7}([.,]\d{1,2})?$/;
 const INTEGER_PATTERN = /^\d+$/;
 const DIMENSIONS = ["widthCm", "depthCm", "heightCm"] as const;
+
+export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function text(formData: FormData, field: string): string {
   const value = formData.get(field);
@@ -48,7 +51,7 @@ function imageHostError(url: string, supabaseUrl: string | undefined): string | 
 export function parseProductForm(
   formData: FormData,
   supabaseUrl: string | undefined,
-): { input: ProductInput; fieldErrors: ProductFieldErrors } {
+): { input: ProductInput; image: File | null; fieldErrors: ProductFieldErrors } {
   const fieldErrors: ProductFieldErrors = {};
 
   const name = text(formData, "name");
@@ -77,7 +80,12 @@ export function parseProductForm(
 
   const imageUrl = text(formData, "imageUrl");
   const imageError = imageUrl ? imageHostError(imageUrl, supabaseUrl) : null;
-  if (imageError) fieldErrors.imageUrl = imageError;
+  if (imageError) fieldErrors.image = imageError;
+
+  const file = formData.get("image");
+  const image = file instanceof File && file.size > 0 ? file : null;
+  if (image && !IMAGE_TYPES.includes(image.type)) fieldErrors.image = "La imagen debe ser JPG, PNG o WebP.";
+  else if (image && image.size > MAX_IMAGE_BYTES) fieldErrors.image = "La imagen debe pesar como máximo 5 MB.";
 
   const dimensions = Object.fromEntries(
     DIMENSIONS.map((field) => {
@@ -106,6 +114,7 @@ export function parseProductForm(
       material: material || null,
       isActive: formData.get("isActive") === "on",
     },
+    image,
     fieldErrors,
   };
 }

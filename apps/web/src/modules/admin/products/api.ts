@@ -48,3 +48,13 @@ export function updateAdminProduct(
 export function deleteAdminProduct(id: number): Promise<Result<void>> {
   return authedApiFetch<void>(`/api/admin/products/${id}`, { method: "DELETE" });
 }
+
+export function uploadProductImage(image: File): Promise<Result<ApiSchemas["ProductImageResponse"]>> {
+  const body = new FormData();
+  body.append("file", image);
+  return authedApiFetch<ApiSchemas["ProductImageResponse"]>("/api/admin/products/images", {
+    method: "POST",
+    body,
+    timeoutMs: 30000,
+  });
+}

@@ -80,14 +80,15 @@ export async function apiFetch<T>(
 ): Promise<Result<T, AppError>> {
   const { body, headers, timeoutMs = DEFAULT_TIMEOUT_MS, ...rest } = init;
   const method = rest.method ?? "GET";
+  const isForm = body instanceof FormData;
 
   let response: Response;
 
   try {
     response = await fetch(`${getBaseUrl()}${path}`, {
       ...rest,
-      headers: { "Content-Type": "application/json", ...headers },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: isForm ? headers : { "Content-Type": "application/json", ...headers },
+      body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });

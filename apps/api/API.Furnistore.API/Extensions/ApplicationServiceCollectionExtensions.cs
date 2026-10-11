@@ -4,6 +4,7 @@ using API.Furnistore.Application.Admin.Categories;
 using API.Furnistore.Application.Admin.Customers;
 using API.Furnistore.Application.Admin.Orders;
 using API.Furnistore.Application.Admin.Products;
+using API.Furnistore.Application.Admin.Reports;
 using API.Furnistore.Application.Auth;
 using API.Furnistore.Application.Carts;
 using API.Furnistore.Application.Clients;
@@ -30,8 +31,10 @@ namespace API.Furnistore.API.Extensions
             services.AddScoped<AdminProductService>();
             services.AddScoped<AdminCategoryService>();
             services.AddScoped<AdminCustomerService>();
+            services.AddScoped<AdminReportService>();
 
             services.AddSingleton<IVerificationEmailSender, SmtpEmailSender>();
+            services.AddHttpClient<IProductImageStorage, SupabaseImageStorage>();
             services.AddSingleton(TimeProvider.System);
 
             return services;

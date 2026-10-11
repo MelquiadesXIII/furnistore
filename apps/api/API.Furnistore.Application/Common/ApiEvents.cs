@@ -9,6 +9,8 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId ProductDeleted = new(1003, nameof(ProductDeleted));
         public static readonly EventId ProductNotFound = new(1010, nameof(ProductNotFound));
         public static readonly EventId ProductCategoryMissing = new(1011, nameof(ProductCategoryMissing));
+        public static readonly EventId ProductImageUploaded = new(1004, nameof(ProductImageUploaded));
+        public static readonly EventId ProductImageUploadFailed = new(1012, nameof(ProductImageUploadFailed));
         public static readonly EventId CategoryCreated = new(1101, nameof(CategoryCreated));
         public static readonly EventId CategoryUpdated = new(1102, nameof(CategoryUpdated));
         public static readonly EventId CategoryDeleted = new(1103, nameof(CategoryDeleted));
@@ -61,6 +63,7 @@ namespace API.Furnistore.Application.Common
         public static readonly EventId DatabaseWarmedUp = new(5005, nameof(DatabaseWarmedUp));
         public static readonly EventId DatabaseWarmupFailed = new(5006, nameof(DatabaseWarmupFailed));
         public static readonly EventId SmtpNotConfigured = new(5007, nameof(SmtpNotConfigured));
+        public static readonly EventId StorageNotConfigured = new(5010, nameof(StorageNotConfigured));
         public static readonly EventId RequestRateLimited = new(5008, nameof(RequestRateLimited));
         public static readonly EventId VersionConflict = new(5009, nameof(VersionConflict));
         public static readonly EventId LogoutSucceeded = new(2005, nameof(LogoutSucceeded));

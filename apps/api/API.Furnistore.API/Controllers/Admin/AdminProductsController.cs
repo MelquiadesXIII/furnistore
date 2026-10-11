@@ -32,6 +32,18 @@ namespace API.Furnistore.API.Controllers.Admin
                 : result.ToActionResult(this);
         }
 
+        [HttpPost("images")]
+        [RequestSizeLimit(AdminProductService.MaxImageBytes + 64 * 1024)]
+        [ProducesResponseType<ProductImageResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken cancellationToken)
+        {
+            await using var content = file.OpenReadStream();
+            return (
+                await products.UploadImageAsync(content, file.ContentType, file.Length, User.UserId(), cancellationToken)
+            ).ToActionResult(this);
+        }
+
         [HttpPut("{id:int}")]
         [ProducesResponseType<AdminProductResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]

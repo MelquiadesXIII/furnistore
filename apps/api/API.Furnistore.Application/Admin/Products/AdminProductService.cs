@@ -13,9 +13,19 @@ namespace API.Furnistore.Application.Admin.Products
     public sealed class AdminProductService(
         APIFurnistoreContext db,
         AuditLog audit,
+        IProductImageStorage images,
         ILogger<AdminProductService> logger
     )
     {
+        public const long MaxImageBytes = 5 * 1024 * 1024;
+
+        private static readonly Dictionary<string, string> ImageExtensions = new()
+        {
+            ["image/jpeg"] = "jpg",
+            ["image/png"] = "png",
+            ["image/webp"] = "webp",
+        };
+
         private static readonly SortMap<Product> Sorts = new SortMap<Product>()
             .Add("name", p => p.Name)
             .Add("price", p => p.Price)
@@ -202,6 +212,46 @@ namespace API.Furnistore.Application.Admin.Products
             logger.LogInformation(ApiEvents.ProductDeleted, "Product {ProductId} deleted by {UserId}", id, actorUserId);
 
             return Result.Ok();
+        }
+
+        public async Task<Result<ProductImageResponse>> UploadImageAsync(
+            Stream content,
+            string contentType,
+            long length,
+            string actorUserId,
+            CancellationToken cancellationToken
+        )
+        {
+            if (!ImageExtensions.TryGetValue(contentType, out var extension))
+                return Result.Fail<ProductImageResponse>(
+                    Error.Validation("product.image_type", "La imagen debe ser JPG, PNG o WebP.")
+                );
+
+            if (length is <= 0 or > MaxImageBytes)
+                return Result.Fail<ProductImageResponse>(
+                    Error.Validation("product.image_size", "La imagen debe pesar como máximo 5 MB.")
+                );
+
+            var fileName = $"{Guid.NewGuid():N}.{extension}";
+
+            try
+            {
+                var url = await images.UploadAsync(fileName, content, contentType, cancellationToken);
+                logger.LogInformation(
+                    ApiEvents.ProductImageUploaded,
+                    "Product image {FileName} uploaded by {UserId}",
+                    fileName,
+                    actorUserId
+                );
+                return Result.Ok(new ProductImageResponse(url));
+            }
+            catch (HttpRequestException exception)
+            {
+                logger.LogError(ApiEvents.ProductImageUploadFailed, exception, "Product image upload failed");
+                return Result.Fail<ProductImageResponse>(
+                    Error.Unexpected("product.image_upload_failed", "No se pudo subir la imagen. Intenta de nuevo.")
+                );
+            }
         }
 
         private static AuditChanges Apply(Product product, ProductInput input, ProductCategory category)

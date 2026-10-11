@@ -3,6 +3,7 @@ using API.Furnistore.Application.Admin.Categories;
 using API.Furnistore.Application.Admin.Customers;
 using API.Furnistore.Application.Admin.Orders;
 using API.Furnistore.Application.Admin.Products;
+using API.Furnistore.Application.Admin.Reports;
 using API.Furnistore.Application.Carts;
 using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Orders;
@@ -17,6 +18,8 @@ namespace API.Furnistore.IntegrationTests
 {
     public sealed class PostgresFixture : IAsyncLifetime
     {
+        public FakeImageStorage Images { get; } = new();
+
         private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine").Build();
         private ServiceProvider services = null!;
 
@@ -38,15 +41,16 @@ namespace API.Furnistore.IntegrationTests
         {
             await container.StartAsync();
 
-            services = BuildServices(container.GetConnectionString());
+            services = BuildServices(container.GetConnectionString(), Images);
 
             await using var db = CreateContext();
             await db.Database.MigrateAsync();
         }
 
-        internal static ServiceProvider BuildServices(string connectionString)
+        internal static ServiceProvider BuildServices(string connectionString, IProductImageStorage? images = null)
         {
             var collection = new ServiceCollection();
+            collection.AddSingleton<IProductImageStorage>(images ?? new FakeImageStorage());
             collection.AddLogging();
             collection.AddDataProtection();
             collection.AddDbContextFactory<APIFurnistoreContext>(options =>
@@ -80,6 +84,7 @@ namespace API.Furnistore.IntegrationTests
             collection.AddScoped<AdminProductService>();
             collection.AddScoped<AdminCategoryService>();
             collection.AddScoped<AdminCustomerService>();
+            collection.AddScoped<AdminReportService>();
             return collection.BuildServiceProvider();
         }
 

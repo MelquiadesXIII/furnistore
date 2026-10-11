@@ -92,4 +92,6 @@ namespace API.Furnistore.Application.Admin.Products
         uint Version,
         bool HasOrders
     );
+
+    public sealed record ProductImageResponse(string Url);
 }

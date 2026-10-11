@@ -120,6 +120,7 @@ try
 
     // Email
     builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+    builder.Services.Configure<SupabaseStorageSettings>(builder.Configuration.GetSection("SupabaseStorage"));
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
@@ -197,6 +198,12 @@ try
         app.Logger.LogWarning(
             ApiEvents.SmtpNotConfigured,
             "SMTP sin credenciales: los correos de confirmación no se van a enviar. Define SmtpSettings__UserName y SmtpSettings__Password en apps/api/.env"
+        );
+
+    if (!app.Services.GetRequiredService<IOptions<SupabaseStorageSettings>>().Value.IsConfigured)
+        app.Logger.LogWarning(
+            ApiEvents.StorageNotConfigured,
+            "Supabase Storage sin configurar: no se van a poder subir imágenes de productos. Define SupabaseStorage__Url y SupabaseStorage__ServiceKey en apps/api/.env"
         );
 
     // Esto es para la asignacion del rol.

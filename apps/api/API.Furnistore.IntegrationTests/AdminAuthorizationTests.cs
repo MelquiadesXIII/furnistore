@@ -86,7 +86,9 @@ namespace API.Furnistore.IntegrationTests
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
-            if (method is "POST" or "PUT")
+            if (path.EndsWith("/images"))
+                request.Content = new MultipartFormDataContent();
+            else if (method is "POST" or "PUT")
                 request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
             if (token is not null)

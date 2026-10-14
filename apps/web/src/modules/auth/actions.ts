@@ -3,13 +3,12 @@
 import { headers } from "next/headers";
 import { clientIpFrom } from "@/lib/api/client-ip";
 import { resendConfirmation, verifyEmail } from "@/modules/auth/api";
+import { EMAIL_PATTERN, INVALID_EMAIL } from "@/modules/auth/email";
 import { toAuthFailure } from "@/modules/auth/error-messages";
 
 export type AuthActionResult = { ok: true } | { ok: false; message: string };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_PATTERN = /^\d{6}$/;
-const INVALID_EMAIL = "Escribe un correo válido.";
 
 function normalizeEmail(email: unknown): string | null {
   const address = typeof email === "string" ? email.trim() : "";

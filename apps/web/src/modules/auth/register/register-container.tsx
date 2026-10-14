@@ -2,12 +2,24 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { isValidPersonName } from "@/modules/account/account-validation";
+import { EMAIL_PATTERN, INVALID_EMAIL } from "@/modules/auth/email";
 import { RegisterForm } from "@/modules/auth/register/register-form";
 import { signIn, UNREACHABLE } from "@/modules/auth/sign-in";
 import type { AuthFailure } from "@/modules/auth/types";
 import { VerifyEmailStep } from "@/modules/auth/verify-email/verify-email-step";
 
 type Registered = { email: string; password: string; emailSent: boolean };
+
+const INVALID_NAME: AuthFailure = {
+  code: null,
+  message: "En nombre y apellidos usa solo letras, separadas por un espacio, un guion o un apóstrofo.",
+};
+
+const UNCONFIRMED: AuthFailure = {
+  code: null,
+  message: "No pudimos confirmar el registro. Vuelve a pulsar «Crear cuenta»: si tu cuenta ya se creó, te enviaremos el código.",
+};
 
 export function RegisterContainer() {
   const router = useRouter();
@@ -17,22 +29,30 @@ export function RegisterContainer() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setFailure(null);
 
     const formData = new FormData(event.currentTarget);
+    const firstName = String(formData.get("firstName") ?? "").trim();
+    const lastName = String(formData.get("lastName") ?? "").trim();
     const email = String(formData.get("emailAddress") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+
+    if (!isValidPersonName(firstName) || !isValidPersonName(lastName)) {
+      setFailure(INVALID_NAME);
+      return;
+    }
+
+    if (!EMAIL_PATTERN.test(email)) {
+      setFailure({ code: null, message: INVALID_EMAIL });
+      return;
+    }
+
+    setPending(true);
+    setFailure(null);
 
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firstName: formData.get("firstName"),
-        lastName: formData.get("lastName"),
-        emailAddress: email,
-        password,
-      }),
+      body: JSON.stringify({ firstName, lastName, emailAddress: email, password }),
     }).catch(() => null);
 
     const data = await res?.json().catch(() => null);
@@ -42,7 +62,7 @@ export function RegisterContainer() {
       return;
     }
 
-    setFailure(data?.error ?? UNREACHABLE);
+    setFailure(!res ? UNREACHABLE : res.status >= 500 ? UNCONFIRMED : (data?.error ?? UNREACHABLE));
     setPending(false);
   }
 

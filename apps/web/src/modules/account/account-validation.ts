@@ -7,6 +7,13 @@ export type AccountActionResult =
 const PHONE_PATTERN = /^\+?[1-9]\d{6,14}$/;
 const PHONE_SEPARATORS = /[\s().-]/g;
 const IDENTITY_CARD_PATTERN = /^\d{11}$/;
+const PERSON_NAME_PATTERN = /^[\p{L}\p{M}]+(?:[ '’-][\p{L}\p{M}]+)*$/u;
+
+export const INVALID_PERSON_NAME = "Usa solo letras, separadas por un espacio, un guion o un apóstrofo.";
+
+export function isValidPersonName(value: string): boolean {
+  return PERSON_NAME_PATTERN.test(value.trim());
+}
 
 const LENGTHS: Record<Exclude<AccountField, "phone" | "identityCard">, { min: number; max: number }> = {
   firstName: { min: 2, max: 60 },
@@ -58,6 +65,10 @@ export function parseAccountForm(formData: FormData) {
   for (const field of Object.keys(LENGTHS) as (keyof typeof LENGTHS)[]) {
     const error = lengthError(values[field], LENGTHS[field]);
     if (error) fieldErrors[field] = error;
+  }
+
+  for (const field of ["firstName", "lastName"] as const) {
+    if (!fieldErrors[field] && !isValidPersonName(values[field])) fieldErrors[field] = INVALID_PERSON_NAME;
   }
 
   if (values.phone.length === 0) {

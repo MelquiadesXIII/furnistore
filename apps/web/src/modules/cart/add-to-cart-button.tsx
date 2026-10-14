@@ -10,6 +10,7 @@ export function AddToCartButton({
   productId,
   productName,
   stock,
+  inCart = 0,
   isAuthenticated,
   returnTo,
   withQuantity = false,
@@ -17,6 +18,7 @@ export function AddToCartButton({
   productId: number;
   productName: string;
   stock: number;
+  inCart?: number;
   isAuthenticated: boolean;
   returnTo: string;
   withQuantity?: boolean;
@@ -44,6 +46,16 @@ export function AddToCartButton({
     return (
       <Button asChild className="w-full">
         <Link href={`/login?next=${encodeURIComponent(returnTo)}`}>Agregar al carrito</Link>
+      </Button>
+    );
+  }
+
+  const available = stock - inCart;
+
+  if (available < 1) {
+    return (
+      <Button asChild variant="outline" className="w-full">
+        <Link href="/cart">Ya tienes todo el stock en tu carrito</Link>
       </Button>
     );
   }
@@ -86,7 +98,7 @@ export function AddToCartButton({
               variant="outline"
               size="icon"
               aria-label="Agregar una unidad"
-              disabled={pending || quantity >= stock}
+              disabled={pending || quantity >= available}
               onClick={() => setQuantity((current) => current + 1)}
             >
               <Plus />

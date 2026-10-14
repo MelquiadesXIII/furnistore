@@ -13,9 +13,11 @@ const LOW_STOCK = 5;
 export function ProductDetailView({
   product,
   isAuthenticated,
+  inCart,
 }: {
   product: Product;
   isAuthenticated: boolean;
+  inCart: number;
 }) {
   const Mark = FURNITURE_MARKS[product.id % FURNITURE_MARKS.length];
   const image = product.imageUrl;
@@ -78,6 +80,7 @@ export function ProductDetailView({
                 productId={product.id}
                 productName={product.name}
                 stock={product.stock}
+                inCart={inCart}
                 isAuthenticated={isAuthenticated}
                 returnTo={buildProductHref(product)}
                 withQuantity

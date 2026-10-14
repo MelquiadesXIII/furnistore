@@ -40,8 +40,24 @@ namespace API.Furnistore.Application.Auth
         )
         {
             var email = request.EmailAddress.Trim();
+            var existing = await userManager.FindByEmailAsync(email);
 
-            if (await userManager.FindByEmailAsync(email) is not null)
+            if (existing is not null && !existing.EmailConfirmed && await userManager.CheckPasswordAsync(existing, request.Password))
+            {
+                var now = clock.GetUtcNow().UtcDateTime;
+                var recentCode = await db.EmailVerificationCodes.AnyAsync(
+                    c => c.UserId == existing.Id && c.CreatedAt > now - ResendCooldown,
+                    cancellationToken
+                );
+
+                var codeSent = recentCode
+                    || await TrySendVerificationCodeAsync(existing, request.FirstName.Trim(), cancellationToken);
+
+                logger.LogInformation(ApiEvents.UserRegistered, "Registration retried for {UserId}", existing.Id);
+                return Result.Ok(new RegisterResponse(codeSent));
+            }
+
+            if (existing is not null)
             {
                 logger.LogWarning(
                     ApiEvents.RegistrationRejected,

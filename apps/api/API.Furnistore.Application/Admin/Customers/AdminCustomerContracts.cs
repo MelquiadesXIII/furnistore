@@ -33,10 +33,10 @@ namespace API.Furnistore.Application.Admin.Customers
 
     public sealed record UpdateCustomerRequest
     {
-        [Required, StringLength(60, MinimumLength = 2)]
+        [Required, StringLength(60, MinimumLength = 2), PersonName]
         public required string FirstName { get; init; }
 
-        [Required, StringLength(60, MinimumLength = 2)]
+        [Required, StringLength(60, MinimumLength = 2), PersonName]
         public required string LastName { get; init; }
 
         [Required, RegularExpression(@"^\+?[1-9]\d{6,14}$")]

@@ -1,16 +1,18 @@
 using System.ComponentModel.DataAnnotations;
+using API.Furnistore.Application.Clients;
 
 namespace API.Furnistore.Application.Auth
 {
     public sealed record RegisterRequest
     {
-        [Required, StringLength(60, MinimumLength = 2)]
+        [Required, StringLength(60, MinimumLength = 2), PersonName]
         public required string FirstName { get; init; }
 
-        [Required, StringLength(60, MinimumLength = 2)]
+        [Required, StringLength(60, MinimumLength = 2), PersonName]
         public required string LastName { get; init; }
 
         [Required, EmailAddress, StringLength(256)]
+        [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Escribe un correo válido.")]
         public required string EmailAddress { get; init; }
 
         [Required, StringLength(128, MinimumLength = 8)]

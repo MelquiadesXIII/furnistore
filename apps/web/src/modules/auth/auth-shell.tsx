@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Image, { type StaticImageData } from "next/image";
+import Link from "next/link";
 import { ChairMark } from "@/components/furniture-marks";
 
 export function AuthShell({
@@ -39,9 +40,12 @@ export function AuthShell({
         {!photo && <ChairMark className="relative z-10 h-16 w-16 text-accent md:h-24 md:w-24" />}
         <div className="relative z-10">
           {photo && <ChairMark className="mb-3 h-10 w-10 text-accent md:h-12 md:w-12" />}
-          <p className="font-display text-3xl font-semibold tracking-tight text-ink md:text-4xl">
+          <Link
+            href="/"
+            className="font-display text-3xl font-semibold tracking-tight text-ink transition-colors hover:text-accent md:text-4xl"
+          >
             Furnistore
-          </p>
+          </Link>
           <p className="mt-2 max-w-xs font-mono text-xs uppercase tracking-widest text-ink-muted">
             Piezas hechas para durar
           </p>
@@ -54,7 +58,10 @@ export function AuthShell({
         }`}
       >
         <div className="w-full max-w-sm">
-          <h1 className="mb-6 font-display text-2xl font-semibold text-ink">{title}</h1>
+          <Link href="/" className="text-sm text-ink-muted transition-colors hover:text-accent">
+            ← Volver a la tienda
+          </Link>
+          <h1 className="mt-2 mb-6 font-display text-2xl font-semibold text-ink">{title}</h1>
           {children}
           <div className="mt-6 text-sm text-ink-muted">{footer}</div>
         </div>

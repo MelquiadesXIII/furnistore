@@ -41,10 +41,6 @@ export function CheckoutSummary({ cart, canPlaceOrder }: { cart: Cart; canPlaceO
           <span className="font-mono text-lg text-ink">{formatPrice(cart.total)}</span>
         </div>
 
-        <p className="rounded-sm border border-dashed border-hairline p-3 text-xs text-ink-muted">
-          Pago simulado: al confirmar, el pedido queda pagado sin cobrarte nada.
-        </p>
-
         <PlaceOrderButton expectedTotal={cart.total} disabled={!canPlaceOrder} />
       </CardContent>
     </Card>

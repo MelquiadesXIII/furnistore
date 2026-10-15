@@ -41,7 +41,7 @@ export async function ProductContainer({
         <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Catálogo</h1>
         <p className="mt-1 text-sm text-ink-muted">
           {result.ok
-            ? `${total} ${total === 1 ? "pieza disponible" : "piezas disponibles"}`
+            ? `${total} ${total === 1 ? "pieza" : "piezas"} en el catálogo`
             : "No se pudo cargar el catálogo."}
         </p>
       </div>

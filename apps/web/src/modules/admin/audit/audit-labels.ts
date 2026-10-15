@@ -6,6 +6,7 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_LABELS: Record<string, string> = {
   status: "Estado",
   cancelReason: "Motivo",
+  total: "Total",
   name: "Nombre",
   description: "Descripción",
   price: "Precio",

@@ -1,3 +1,4 @@
+using API.Furnistore.Application.Admin.Audit;
 using API.Furnistore.Application.Common;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
@@ -10,6 +11,7 @@ namespace API.Furnistore.Application.Orders
     public sealed class OrderService(
         APIFurnistoreContext db,
         OrderWorkflow workflow,
+        AuditLog audit,
         ILogger<OrderService> logger
     )
     {
@@ -234,6 +236,16 @@ namespace API.Furnistore.Application.Orders
                 };
 
                 db.Orders.Add(order);
+                await db.SaveChangesAsync(cancellationToken);
+
+                audit.Record(
+                    userId,
+                    AuditActions.OrderCreated,
+                    AuditEntities.Order,
+                    order.Id,
+                    $"Pedido #{order.OrderNumber} creado",
+                    new AuditChanges().Set("status", order.Status).Set("total", order.Total)
+                );
                 await db.SaveChangesAsync(cancellationToken);
 
                 await db.CartItems

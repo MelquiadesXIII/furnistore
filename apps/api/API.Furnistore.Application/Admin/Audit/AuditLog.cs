@@ -21,6 +21,7 @@ namespace API.Furnistore.Application.Admin.Audit
 
     public static class AuditActions
     {
+        public const string OrderCreated = "order.created";
         public const string OrderProcessing = "order.processing";
         public const string OrderShipped = "order.shipped";
         public const string OrderDelivered = "order.delivered";

@@ -17,10 +17,10 @@ namespace API.Furnistore.Application.Products
         [Range(1, int.MaxValue)]
         public int? CategoryId { get; init; }
 
-        [Range(0, 1_000_000)]
+        [Range(0, 9_999_999)]
         public decimal? MinPrice { get; init; }
 
-        [Range(0, 1_000_000)]
+        [Range(0, 9_999_999)]
         public decimal? MaxPrice { get; init; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

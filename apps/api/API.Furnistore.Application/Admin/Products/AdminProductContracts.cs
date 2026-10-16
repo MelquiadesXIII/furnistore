@@ -41,7 +41,7 @@ namespace API.Furnistore.Application.Admin.Products
         [StringLength(2000)]
         public string? Description { get; init; }
 
-        [Range(0.01, 1_000_000)]
+        [Range(0.01, 9_999_999)]
         public decimal Price { get; init; }
 
         [Range(0, 1_000_000)]

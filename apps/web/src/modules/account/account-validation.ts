@@ -11,8 +11,12 @@ const PERSON_NAME_PATTERN = /^[\p{L}\p{M}]+(?:[ '’-][\p{L}\p{M}]+)*$/u;
 
 export const INVALID_PERSON_NAME = "Usa solo letras, separadas por un espacio, un guion o un apóstrofo.";
 
+export function normalizePersonName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 export function isValidPersonName(value: string): boolean {
-  return PERSON_NAME_PATTERN.test(value.trim());
+  return PERSON_NAME_PATTERN.test(normalizePersonName(value));
 }
 
 const LENGTHS: Record<Exclude<AccountField, "phone" | "identityCard">, { min: number; max: number }> = {
@@ -37,8 +41,9 @@ function isValidIdentityCard(value: string): boolean {
   const month = Number(value.slice(2, 4));
   const day = Number(value.slice(4, 6));
   const date = new Date(Date.UTC(year, month - 1, day));
+  const exists = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return exists && date.getTime() <= Date.now();
 }
 
 function lengthError(value: string, { min, max }: { min: number; max: number }): string | null {
@@ -50,8 +55,8 @@ function lengthError(value: string, { min, max }: { min: number; max: number }):
 
 export function parseAccountForm(formData: FormData) {
   const values = {
-    firstName: text(formData, "firstName"),
-    lastName: text(formData, "lastName"),
+    firstName: normalizePersonName(text(formData, "firstName")),
+    lastName: normalizePersonName(text(formData, "lastName")),
     phone: text(formData, "phone").replace(PHONE_SEPARATORS, ""),
     identityCard: text(formData, "identityCard").replace(/\s/g, ""),
     street: text(formData, "street"),
@@ -80,7 +85,7 @@ export function parseAccountForm(formData: FormData) {
   if (values.identityCard.length === 0) {
     fieldErrors.identityCard = "Este campo es obligatorio.";
   } else if (!isValidIdentityCard(values.identityCard)) {
-    fieldErrors.identityCard = "Escribe los 11 dígitos de tu carnet de identidad.";
+    fieldErrors.identityCard = "Revisa tu carnet: son 11 dígitos y empieza por tu fecha de nacimiento.";
   }
 
   return { values, fieldErrors };

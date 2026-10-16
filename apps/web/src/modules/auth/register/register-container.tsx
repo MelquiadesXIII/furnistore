@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { isValidPersonName } from "@/modules/account/account-validation";
+import { isValidPersonName, normalizePersonName } from "@/modules/account/account-validation";
 import { EMAIL_PATTERN, INVALID_EMAIL } from "@/modules/auth/email";
 import { RegisterForm } from "@/modules/auth/register/register-form";
 import { signIn, UNREACHABLE } from "@/modules/auth/sign-in";
@@ -31,8 +31,8 @@ export function RegisterContainer() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const firstName = String(formData.get("firstName") ?? "").trim();
-    const lastName = String(formData.get("lastName") ?? "").trim();
+    const firstName = normalizePersonName(String(formData.get("firstName") ?? ""));
+    const lastName = normalizePersonName(String(formData.get("lastName") ?? ""));
     const email = String(formData.get("emailAddress") ?? "").trim();
     const password = String(formData.get("password") ?? "");
 

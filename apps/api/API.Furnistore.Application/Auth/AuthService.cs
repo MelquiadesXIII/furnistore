@@ -51,7 +51,7 @@ namespace API.Furnistore.Application.Auth
                 );
 
                 var codeSent = recentCode
-                    || await TrySendVerificationCodeAsync(existing, request.FirstName.Trim(), cancellationToken);
+                    || await TrySendVerificationCodeAsync(existing, TextInput.CollapseSpaces(request.FirstName), cancellationToken);
 
                 logger.LogInformation(ApiEvents.UserRegistered, "Registration retried for {UserId}", existing.Id);
                 return Result.Ok(new RegisterResponse(codeSent));
@@ -95,8 +95,8 @@ namespace API.Furnistore.Application.Auth
             db.Clients.Add(new Client
             {
                 UserId = user.Id,
-                FirstName = request.FirstName.Trim(),
-                LastName = request.LastName.Trim(),
+                FirstName = TextInput.CollapseSpaces(request.FirstName),
+                LastName = TextInput.CollapseSpaces(request.LastName),
             });
             await db.SaveChangesAsync(cancellationToken);
 
@@ -106,7 +106,7 @@ namespace API.Furnistore.Application.Auth
             if (!await userManager.IsInRoleAsync(user, "User"))
                 await userManager.AddToRoleAsync(user, "User");
             
-            var emailSent = await TrySendVerificationCodeAsync(user, request.FirstName.Trim(), cancellationToken);
+            var emailSent = await TrySendVerificationCodeAsync(user, TextInput.CollapseSpaces(request.FirstName), cancellationToken);
 
             return Result.Ok(new RegisterResponse(emailSent));
         }

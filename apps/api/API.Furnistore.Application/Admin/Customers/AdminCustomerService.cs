@@ -173,8 +173,8 @@ namespace API.Furnistore.Application.Admin.Customers
 
             db.Entry(client).Property(c => c.Version).OriginalValue = request.Version;
 
-            var firstName = request.FirstName.Trim();
-            var lastName = request.LastName.Trim();
+            var firstName = TextInput.CollapseSpaces(request.FirstName);
+            var lastName = TextInput.CollapseSpaces(request.LastName);
             var phone = request.Phone.Trim();
             var identityCard = request.IdentityCard.Trim();
             var street = request.Address.Street.Trim();

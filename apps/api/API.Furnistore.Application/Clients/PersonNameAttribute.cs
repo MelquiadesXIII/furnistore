@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
+using API.Furnistore.Application.Common;
 
 namespace API.Furnistore.Application.Clients
 {
@@ -10,6 +11,6 @@ namespace API.Furnistore.Application.Clients
         private static partial Regex Pattern();
 
         public override bool IsValid(object? value) =>
-            value is null || (value is string text && Pattern().IsMatch(text.Trim()));
+            value is null || (value is string text && Pattern().IsMatch(TextInput.CollapseSpaces(text)));
     }
 }

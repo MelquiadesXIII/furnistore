@@ -87,8 +87,8 @@ namespace API.Furnistore.Application.Clients
 
         private static void Apply(Client client, UpdateClientRequest request)
         {
-            client.FirstName = request.FirstName.Trim();
-            client.LastName = request.LastName.Trim();
+            client.FirstName = TextInput.CollapseSpaces(request.FirstName);
+            client.LastName = TextInput.CollapseSpaces(request.LastName);
             client.Phone = request.Phone.Trim();
             client.IdentityCard = request.IdentityCard.Trim();
             client.Street = request.Address.Street.Trim();

@@ -4,7 +4,7 @@ using System.Globalization;
 namespace API.Furnistore.Application.Clients
 {
     public sealed class IdentityCardAttribute()
-        : ValidationAttribute("El carnet de identidad debe tener 11 dígitos y empezar por una fecha de nacimiento válida.")
+        : ValidationAttribute("El carnet de identidad debe tener 11 dígitos y empezar por una fecha de nacimiento válida y no futura.")
     {
         public override bool IsValid(object? value) => value is null || (value is string text && IsValidNumber(text));
 
@@ -21,12 +21,13 @@ namespace API.Furnistore.Application.Clients
             };
 
             return DateOnly.TryParseExact(
-                century + value[..6],
-                "yyyyMMdd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out _
-            );
+                    century + value[..6],
+                    "yyyyMMdd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var birthDate
+                )
+                && birthDate <= DateOnly.FromDateTime(DateTime.UtcNow);
         }
     }
 }

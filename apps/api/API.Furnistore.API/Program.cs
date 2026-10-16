@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NLog;
 using NLog.Web;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var logger = NLog.LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
 logger.Debug("init main");
@@ -65,6 +66,14 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
+    // para que aparesca el dato en consola
+    if (builder.Configuration.GetValue<bool>("Email:LogOnly"))
+    {
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<IVerificationEmailSender, LogVerificationEmailSender>()
+        );
+    }
+
     builder.Services.AddHealthChecks()
     .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
 

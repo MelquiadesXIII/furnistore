@@ -11,7 +11,7 @@ const MOMENT = new Intl.DateTimeFormat("sv-SE", {
 });
 
 const UNITS: Partial<Record<CellKind, string>> = {
-  money: "USD",
+  money: "CUP",
   percent: "%",
 };
 

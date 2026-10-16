@@ -245,7 +245,7 @@ namespace API.Furnistore.Application.Admin.Products
                 );
                 return Result.Ok(new ProductImageResponse(url));
             }
-            catch (HttpRequestException exception)
+            catch (Exception exception) when (exception is HttpRequestException or IOException)
             {
                 logger.LogError(ApiEvents.ProductImageUploadFailed, exception, "Product image upload failed");
                 return Result.Fail<ProductImageResponse>(

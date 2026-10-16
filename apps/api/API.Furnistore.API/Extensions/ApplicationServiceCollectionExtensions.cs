@@ -34,7 +34,8 @@ namespace API.Furnistore.API.Extensions
             services.AddScoped<AdminReportService>();
 
             services.AddSingleton<IVerificationEmailSender, SmtpEmailSender>();
-            services.AddHttpClient<IProductImageStorage, SupabaseImageStorage>();
+            services.AddHttpContextAccessor();
+            services.AddSingleton<IProductImageStorage, LocalImageStorage>();
             services.AddSingleton(TimeProvider.System);
 
             return services;

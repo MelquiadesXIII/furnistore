@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: furnistore-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: furnistore
+      POSTGRES_USER: furnistore
+      POSTGRES_PASSWORD: furnistore
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - furnistore-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U furnistore -d furnistore"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  furnistore-db:

@@ -1,5 +1,6 @@
 import { CircleCheck } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCalendarDate, formatMoment } from "@/lib/format-date";
 import { formatPrice } from "@/lib/format-price";
@@ -37,13 +38,16 @@ export function OrderDetailView({ order, justPlaced }: { order: Order; justPlace
           className="flex items-start gap-3 rounded-sm border border-accent/40 bg-accent/10 p-4"
         >
           <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-1 flex-col gap-1">
             <p className="font-medium text-ink">¡Gracias por tu compra!</p>
             <p className="text-sm text-ink-muted">
               Tu pedido está confirmado. Te lo entregaremos alrededor del{" "}
               {formatCalendarDate(order.estimatedDeliveryDate)}.
             </p>
           </div>
+          <Button asChild size="sm" className="shrink-0">
+            <Link href="/">Seguir comprando</Link>
+          </Button>
         </div>
       )}
 

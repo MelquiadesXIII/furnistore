@@ -5561,7 +5561,7 @@
             "name": "MinPrice",
             "in": "query",
             "schema": {
-              "maximum": 1000000,
+              "maximum": 9999999,
               "minimum": 0,
               "type": "number",
               "format": "double"
@@ -5571,7 +5571,7 @@
             "name": "MaxPrice",
             "in": "query",
             "schema": {
-              "maximum": 1000000,
+              "maximum": 9999999,
               "minimum": 0,
               "type": "number",
               "format": "double"
@@ -6560,7 +6560,7 @@
             "nullable": true
           },
           "price": {
-            "maximum": 1000000,
+            "maximum": 9999999,
             "minimum": 0.01,
             "type": "number",
             "format": "double"
@@ -7258,6 +7258,7 @@
         "required": [
           "emailAddress",
           "firstName",
+          "identityCard",
           "lastName",
           "password"
         ],
@@ -7273,9 +7274,14 @@
             "minLength": 2,
             "type": "string"
           },
+          "identityCard": {
+            "minLength": 1,
+            "type": "string"
+          },
           "emailAddress": {
             "maxLength": 256,
             "minLength": 0,
+            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
             "type": "string",
             "format": "email"
           },
@@ -7728,7 +7734,7 @@
             "nullable": true
           },
           "price": {
-            "maximum": 1000000,
+            "maximum": 9999999,
             "minimum": 0.01,
             "type": "number",
             "format": "double"

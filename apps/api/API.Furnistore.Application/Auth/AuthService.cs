@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using API.Furnistore.Application.Admin;
+using API.Furnistore.Application.Clients;
 using API.Furnistore.Application.Common;
 using API.Furnistore.Data;
 using API.Furnistore.Shared;
@@ -69,6 +71,11 @@ namespace API.Furnistore.Application.Auth
                 );
             }
 
+            var identityCard = request.IdentityCard.Trim();
+
+            if (await db.Clients.AnyAsync(c => c.IdentityCard == identityCard, cancellationToken))
+                return IdentityCardRejected(email);
+
             var user = new IdentityUser
             {
                 Email = email,
@@ -97,8 +104,19 @@ namespace API.Furnistore.Application.Auth
                 UserId = user.Id,
                 FirstName = TextInput.CollapseSpaces(request.FirstName),
                 LastName = TextInput.CollapseSpaces(request.LastName),
+                IdentityCard = identityCard,
             });
-            await db.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exception))
+            {
+                db.ChangeTracker.Clear();
+                await userManager.DeleteAsync(user);
+                return IdentityCardRejected(email);
+            }
 
             logger.LogInformation(ApiEvents.UserRegistered, "User {UserId} registered", user.Id);
             
@@ -515,6 +533,16 @@ namespace API.Furnistore.Application.Auth
                 reason
             );
             return Result.Fail(error);
+        }
+
+        private Result<RegisterResponse> IdentityCardRejected(string email)
+        {
+            logger.LogWarning(
+                ApiEvents.RegistrationRejected,
+                "Registration rejected for {EmailMasked}: identity card already registered",
+                Mask(email)
+            );
+            return Result.Fail<RegisterResponse>(ClientService.IdentityCardTaken());
         }
 
         private Result<AuthTokensResponse> Disabled(IdentityUser user)

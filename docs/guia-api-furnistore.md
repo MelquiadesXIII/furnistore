@@ -1010,7 +1010,7 @@ Un atributo de validación propio es corto. Este es el del carnet (`Application/
 
 ```csharp
 public sealed class IdentityCardAttribute()
-    : ValidationAttribute("El carnet de identidad debe tener 11 dígitos y empezar por una fecha de nacimiento válida.")
+    : ValidationAttribute("El carnet de identidad debe tener 11 dígitos y empezar por una fecha de nacimiento válida y no futura.")
 {
     public override bool IsValid(object? value) => value is null || (value is string text && IsValidNumber(text));
     …
@@ -1251,7 +1251,7 @@ Los datos de cada cliente para vender y enviar.
 
 - Su clave primaria se llama `ID`, en mayúsculas, a diferencia del resto (`Id`). Es una herencia de la primera migración; cambiarla obligaría a renombrar la columna y todas sus referencias, y no aporta nada.
 - `UserId` es único: una cuenta tiene como mucho un cliente. El registro crea siempre los dos a la vez.
-- `Phone`, `IdentityCard`, `Street`, `City` y `Province` admiten `NULL`, porque al registrarse solo se piden nombre y correo. El checkout comprueba que estén completos (`IsProfileComplete`) antes de dejar comprar.
+- `Phone`, `Street`, `City` y `Province` admiten `NULL`, porque al registrarse solo se piden nombre, carnet y correo. `IdentityCard` también admite `NULL`: el registro lo pide, pero las cuentas creadas antes de ese cambio pueden no tenerlo. El checkout comprueba que todo esté completo (`IsProfileComplete`) antes de dejar comprar.
 - `IdentityCard` es `varchar(11)` y único: dos clientes no pueden tener el mismo carnet. Si alguien lo intenta, la base lanza una violación de unicidad y la API la traduce a un mensaje claro (14.8).
 - También usa `xmin` como versión, por el mismo motivo que `Products`.
 
@@ -2020,6 +2020,17 @@ Comprobar en C# que un carnet no está en uso y luego guardarlo tiene la misma c
 catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exception))
 {
     return Result.Fail(IdentityCardTaken());
+}
+```
+
+En el registro hay un paso más. La cuenta (`AspNetUsers`) se crea antes que el cliente, así que si el carnet choca al guardar el cliente quedaría una cuenta sin cliente. Por eso `AuthService` primero pregunta si el carnet ya existe (el caso normal: responde 409 sin crear nada) y, si aun así pierde la carrera, borra la cuenta recién creada antes de devolver el mismo error:
+
+```csharp
+catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exception))
+{
+    db.ChangeTracker.Clear();
+    await userManager.DeleteAsync(user);
+    return IdentityCardRejected(email);
 }
 ```
 

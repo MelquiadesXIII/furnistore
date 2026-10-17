@@ -49,6 +49,23 @@ export function RegisterForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="identityCard" className="text-ink-muted">
+          Carnet de identidad
+        </Label>
+        <Input
+          id="identityCard"
+          name="identityCard"
+          type="text"
+          inputMode="numeric"
+          required
+          maxLength={11}
+          autoComplete="off"
+          className="bg-surface-raised"
+        />
+        <p className="text-xs text-ink-muted">Los 11 dígitos, sin espacios.</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="emailAddress" className="text-ink-muted">
           Correo electrónico
         </Label>

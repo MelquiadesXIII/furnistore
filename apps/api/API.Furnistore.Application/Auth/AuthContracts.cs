@@ -11,6 +11,9 @@ namespace API.Furnistore.Application.Auth
         [Required, StringLength(60, MinimumLength = 2), PersonName]
         public required string LastName { get; init; }
 
+        [Required, IdentityCard]
+        public required string IdentityCard { get; init; }
+
         [Required, EmailAddress, StringLength(256)]
         [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$", ErrorMessage = "Escribe un correo válido.")]
         public required string EmailAddress { get; init; }

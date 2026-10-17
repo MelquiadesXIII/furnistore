@@ -4139,6 +4139,7 @@ export interface components {
         RegisterRequest: {
             firstName: string;
             lastName: string;
+            identityCard: string;
             /** Format: email */
             emailAddress: string;
             password: string;

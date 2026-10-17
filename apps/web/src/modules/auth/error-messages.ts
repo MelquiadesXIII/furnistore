@@ -14,6 +14,7 @@ const AUTH_MESSAGES: Record<string, string> = {
   "auth.locked_out": "Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.",
   "auth.email_exists": "Ya existe una cuenta con ese correo. Inicia sesión para confirmarla.",
   "auth.registration_failed": "No pudimos crear la cuenta. Revisa los datos e intenta de nuevo.",
+  "client.identity_card_taken": "Ese carnet de identidad ya está registrado en otra cuenta.",
 };
 
 export function toAuthFailure(error: AppError): AuthFailure {

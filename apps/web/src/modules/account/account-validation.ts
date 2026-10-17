@@ -11,6 +11,8 @@ const PERSON_NAME_PATTERN = /^[\p{L}\p{M}]+(?:[ '’-][\p{L}\p{M}]+)*$/u;
 
 export const INVALID_PERSON_NAME = "Usa solo letras, separadas por un espacio, un guion o un apóstrofo.";
 
+export const INVALID_IDENTITY_CARD = "Revisa tu carnet: son 11 dígitos y empieza por tu fecha de nacimiento.";
+
 export function normalizePersonName(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -33,7 +35,11 @@ function text(formData: FormData, field: AccountField): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function isValidIdentityCard(value: string): boolean {
+export function normalizeIdentityCard(value: string): string {
+  return value.replace(/\s/g, "");
+}
+
+export function isValidIdentityCard(value: string): boolean {
   if (!IDENTITY_CARD_PATTERN.test(value)) return false;
 
   const century = value[6] === "9" ? 1800 : value[6] >= "6" ? 2000 : 1900;
@@ -58,7 +64,7 @@ export function parseAccountForm(formData: FormData) {
     firstName: normalizePersonName(text(formData, "firstName")),
     lastName: normalizePersonName(text(formData, "lastName")),
     phone: text(formData, "phone").replace(PHONE_SEPARATORS, ""),
-    identityCard: text(formData, "identityCard").replace(/\s/g, ""),
+    identityCard: normalizeIdentityCard(text(formData, "identityCard")),
     street: text(formData, "street"),
     city: text(formData, "city"),
     province: text(formData, "province"),
@@ -85,7 +91,7 @@ export function parseAccountForm(formData: FormData) {
   if (values.identityCard.length === 0) {
     fieldErrors.identityCard = "Este campo es obligatorio.";
   } else if (!isValidIdentityCard(values.identityCard)) {
-    fieldErrors.identityCard = "Revisa tu carnet: son 11 dígitos y empieza por tu fecha de nacimiento.";
+    fieldErrors.identityCard = INVALID_IDENTITY_CARD;
   }
 
   return { values, fieldErrors };

@@ -23,9 +23,10 @@ namespace API.Furnistore.IntegrationTests
         public async Task Register_creates_a_client_without_invented_data_and_emails_a_code()
         {
             var email = NewEmail();
+            var identityCard = TestData.NewIdentityCard();
             var outbox = new Outbox();
 
-            var result = await WithAuthAsync(outbox, auth => auth.RegisterAsync(Register(email, firstName: "<b>Lucía</b>"), CancellationToken.None));
+            var result = await WithAuthAsync(outbox, auth => auth.RegisterAsync(Register(email, firstName: "<b>Lucía</b>", identityCard: identityCard), CancellationToken.None));
 
             Assert.True(result.IsSuccess, result.Error?.Message);
             Assert.True(result.Value.EmailSent);
@@ -34,6 +35,7 @@ namespace API.Furnistore.IntegrationTests
             var client = await db.Clients.SingleAsync(c => db.Users.Any(u => u.Id == c.UserId && u.Email == email));
             Assert.Equal("<b>Lucía</b>", client.FirstName);
             Assert.Equal("Gómez Pérez", client.LastName);
+            Assert.Equal(identityCard, client.IdentityCard);
             Assert.Null(client.Phone);
             Assert.False(client.IsProfileComplete);
 
@@ -48,6 +50,23 @@ namespace API.Furnistore.IntegrationTests
             var stored = await db.EmailVerificationCodes.SingleAsync(c => db.Users.Any(u => u.Id == c.UserId && u.Email == email));
             Assert.DoesNotContain(outbox.LastCode, stored.CodeHash);
             Assert.Equal(64, stored.CodeHash.Length);
+        }
+
+        [Fact]
+        public async Task Register_rejects_an_identity_card_already_in_use_without_creating_the_account()
+        {
+            var identityCard = TestData.NewIdentityCard();
+            var outbox = new Outbox();
+            await WithAuthAsync(outbox, auth => auth.RegisterAsync(Register(NewEmail(), identityCard: identityCard), CancellationToken.None));
+
+            var email = NewEmail();
+            var result = await WithAuthAsync(outbox, auth => auth.RegisterAsync(Register(email, identityCard: identityCard), CancellationToken.None));
+
+            Assert.Equal("client.identity_card_taken", result.Error!.Code);
+            Assert.Single(outbox.Sent);
+
+            await using var db = fixture.CreateContext();
+            Assert.False(await db.Users.AnyAsync(u => u.Email == email));
         }
 
         [Fact]
@@ -417,11 +436,12 @@ namespace API.Furnistore.IntegrationTests
 
         private static string NewEmail() => $"{Guid.NewGuid():N}@example.com";
 
-        private static RegisterRequest Register(string email, string firstName = "Lucía") =>
+        private static RegisterRequest Register(string email, string firstName = "Lucía", string? identityCard = null) =>
             new()
             {
                 FirstName = firstName,
                 LastName = "Gómez Pérez",
+                IdentityCard = identityCard ?? TestData.NewIdentityCard(),
                 EmailAddress = email,
                 Password = Password,
             };

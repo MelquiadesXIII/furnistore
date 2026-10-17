@@ -2,7 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { isValidPersonName, normalizePersonName } from "@/modules/account/account-validation";
+import {
+  INVALID_IDENTITY_CARD,
+  isValidIdentityCard,
+  isValidPersonName,
+  normalizeIdentityCard,
+  normalizePersonName,
+} from "@/modules/account/account-validation";
 import { EMAIL_PATTERN, INVALID_EMAIL } from "@/modules/auth/email";
 import { RegisterForm } from "@/modules/auth/register/register-form";
 import { signIn, UNREACHABLE } from "@/modules/auth/sign-in";
@@ -33,11 +39,17 @@ export function RegisterContainer() {
     const formData = new FormData(event.currentTarget);
     const firstName = normalizePersonName(String(formData.get("firstName") ?? ""));
     const lastName = normalizePersonName(String(formData.get("lastName") ?? ""));
+    const identityCard = normalizeIdentityCard(String(formData.get("identityCard") ?? ""));
     const email = String(formData.get("emailAddress") ?? "").trim();
     const password = String(formData.get("password") ?? "");
 
     if (!isValidPersonName(firstName) || !isValidPersonName(lastName)) {
       setFailure(INVALID_NAME);
+      return;
+    }
+
+    if (!isValidIdentityCard(identityCard)) {
+      setFailure({ code: null, message: INVALID_IDENTITY_CARD });
       return;
     }
 
@@ -52,7 +64,7 @@ export function RegisterContainer() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, emailAddress: email, password }),
+      body: JSON.stringify({ firstName, lastName, identityCard, emailAddress: email, password }),
     }).catch(() => null);
 
     const data = await res?.json().catch(() => null);

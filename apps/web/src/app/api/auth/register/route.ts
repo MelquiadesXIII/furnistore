@@ -4,10 +4,10 @@ import { register } from "@/modules/auth/api";
 import { toAuthFailure } from "@/modules/auth/error-messages";
 
 export async function POST(request: Request) {
-  const { firstName, lastName, emailAddress, password } = await request.json().catch(() => ({}));
+  const { firstName, lastName, identityCard, emailAddress, password } = await request.json().catch(() => ({}));
 
   const result = await register(
-    { firstName, lastName, emailAddress, password },
+    { firstName, lastName, identityCard, emailAddress, password },
     clientIpFrom(request.headers),
   );
 

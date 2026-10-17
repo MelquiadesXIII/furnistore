@@ -84,12 +84,13 @@ namespace API.Furnistore.IntegrationTests
             Assert.Empty(delivered.Value.AvailableActions);
 
             Assert.Equal(
-                ["order.processing", "order.shipped", "order.delivered"],
+                ["order.created", "order.processing", "order.shipped", "order.delivered"],
                 delivered.Value.History.Select(entry => entry.Action)
             );
-            Assert.All(delivered.Value.History, entry => Assert.Equal("admin-1", entry.Actor.UserId));
-            Assert.Equal($"Pedido #{order.OrderNumber}: Pagado → En preparación", delivered.Value.History[0].Summary);
-            Assert.Equal(new("Paid", "Processing"), delivered.Value.History[0].Changes["status"]);
+            Assert.Equal(userId, delivered.Value.History[0].Actor.UserId);
+            Assert.All(delivered.Value.History.Skip(1), entry => Assert.Equal("admin-1", entry.Actor.UserId));
+            Assert.Equal($"Pedido #{order.OrderNumber}: Pagado → En preparación", delivered.Value.History[1].Summary);
+            Assert.Equal(new("Paid", "Processing"), delivered.Value.History[1].Changes["status"]);
         }
 
         [Fact]
@@ -156,7 +157,7 @@ namespace API.Furnistore.IntegrationTests
 
             Assert.Single(results, result => result.IsSuccess);
             var detail = await AdminAsync(service => service.GetByIdAsync(order.Id, CancellationToken.None));
-            Assert.Single(detail.Value.History);
+            Assert.Single(detail.Value.History, entry => entry.Action == "order.processing");
         }
 
         private Task<Result<OrderResponse>> CancelAsync(int orderId, string userId, string? reason = null) =>

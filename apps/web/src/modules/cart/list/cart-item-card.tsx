@@ -1,6 +1,7 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { FURNITURE_MARKS } from "@/components/furniture-marks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,21 @@ export function CartItemCard({
   const Mark = FURNITURE_MARKS[item.productId % FURNITURE_MARKS.length];
   const unavailable = !item.isActive;
   const exceedsStock = item.quantity > item.stock;
+  const [quantity, setQuantity] = useState(String(item.quantity));
+
+  useEffect(() => {
+    setQuantity(String(item.quantity));
+  }, [item.quantity]);
+
+  function commitQuantity() {
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    const nextQuantity = Number.isInteger(parsedQuantity)
+      ? Math.min(Math.max(parsedQuantity, 1), item.stock)
+      : item.quantity;
+
+    setQuantity(String(nextQuantity));
+    if (nextQuantity !== item.quantity) onQuantityChange(nextQuantity);
+  }
 
   return (
     <li>
@@ -84,9 +100,18 @@ export function CartItemCard({
                 >
                   <Minus />
                 </Button>
-                <span className="w-8 text-center font-mono tabular-nums text-ink">
-                  {item.quantity}
-                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={item.stock}
+                  inputMode="numeric"
+                  aria-label={`Cantidad de ${item.productName}`}
+                  value={quantity}
+                  disabled={disabled || unavailable || item.stock < 1}
+                  onChange={(event) => setQuantity(event.target.value)}
+                  onBlur={commitQuantity}
+                  className="h-7 w-8 appearance-none border-0 bg-transparent p-0 text-center font-mono tabular-nums text-ink outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
                 <Button
                   type="button"
                   variant="outline"

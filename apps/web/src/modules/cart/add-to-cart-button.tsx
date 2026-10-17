@@ -23,7 +23,7 @@ export function AddToCartButton({
   returnTo: string;
   withQuantity?: boolean;
 }) {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState("1");
   const [added, setAdded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -62,15 +62,27 @@ export function AddToCartButton({
 
   function handleAdd() {
     setError(null);
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > available) {
+      setError(`Introduce una cantidad entre 1 y ${available}.`);
+      return;
+    }
+
     startTransition(async () => {
-      const result = await addToCart(productId, quantity, returnTo);
+      const result = await addToCart(productId, parsedQuantity, returnTo);
       if (result.ok) {
         setAdded(true);
-        setQuantity(1);
+        setQuantity("1");
       } else {
         setError(result.message);
       }
     });
+  }
+
+  function adjustQuantity(delta: number) {
+    const current = Number.parseInt(quantity, 10);
+    const base = Number.isInteger(current) ? current : 1;
+    setQuantity(String(Math.min(Math.max(base + delta, 1), available)));
   }
 
   return (
@@ -87,19 +99,33 @@ export function AddToCartButton({
               variant="outline"
               size="icon"
               aria-label="Quitar una unidad"
-              disabled={pending || quantity <= 1}
-              onClick={() => setQuantity((current) => current - 1)}
+              disabled={pending || Number(quantity) <= 1}
+              onClick={() => adjustQuantity(-1)}
             >
               <Minus />
             </Button>
-            <span className="w-8 text-center font-mono tabular-nums text-ink">{quantity}</span>
+            <input
+              type="number"
+              min={1}
+              max={available}
+              inputMode="numeric"
+              aria-label={`Cantidad de ${productName}`}
+              value={quantity}
+              disabled={pending}
+              onChange={(event) => setQuantity(event.target.value)}
+              onBlur={() => {
+                const parsed = Number.parseInt(quantity, 10);
+                setQuantity(String(Number.isInteger(parsed) ? Math.min(Math.max(parsed, 1), available) : 1));
+              }}
+              className="h-8 w-8 appearance-none border-0 bg-transparent p-0 text-center font-mono tabular-nums text-ink outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
             <Button
               type="button"
               variant="outline"
               size="icon"
               aria-label="Agregar una unidad"
-              disabled={pending || quantity >= available}
-              onClick={() => setQuantity((current) => current + 1)}
+              disabled={pending || Number(quantity) >= available}
+              onClick={() => adjustQuantity(1)}
             >
               <Plus />
             </Button>

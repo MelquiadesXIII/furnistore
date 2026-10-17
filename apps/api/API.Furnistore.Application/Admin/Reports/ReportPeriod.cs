@@ -5,7 +5,7 @@ namespace API.Furnistore.Application.Admin.Reports
     public static class StoreCalendar
     {
         public const string TimeZoneId = "America/Havana";
-        public const string Currency = "CUP";
+        public const string Currency = "USD";
 
         private static readonly TimeZoneInfo Zone = TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId);
 

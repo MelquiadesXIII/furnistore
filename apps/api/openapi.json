@@ -5561,7 +5561,7 @@
             "name": "MinPrice",
             "in": "query",
             "schema": {
-              "maximum": 9999999,
+              "maximum": 1000000,
               "minimum": 0,
               "type": "number",
               "format": "double"
@@ -5571,7 +5571,7 @@
             "name": "MaxPrice",
             "in": "query",
             "schema": {
-              "maximum": 9999999,
+              "maximum": 1000000,
               "minimum": 0,
               "type": "number",
               "format": "double"
@@ -6560,7 +6560,7 @@
             "nullable": true
           },
           "price": {
-            "maximum": 9999999,
+            "maximum": 1000000,
             "minimum": 0.01,
             "type": "number",
             "format": "double"
@@ -7734,7 +7734,7 @@
             "nullable": true
           },
           "price": {
-            "maximum": 9999999,
+            "maximum": 1000000,
             "minimum": 0.01,
             "type": "number",
             "format": "double"

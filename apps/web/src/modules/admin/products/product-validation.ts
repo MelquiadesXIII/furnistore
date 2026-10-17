@@ -58,8 +58,8 @@ export function parseProductForm(
 
   const priceText = text(formData, "price");
   const price = Number(priceText.replace(",", "."));
-  if (!PRICE_PATTERN.test(priceText) || price < 0.01 || price > 9_999_999) {
-    fieldErrors.price = "Un precio entre 0,01 y 9.999.999 CUP, con hasta 2 decimales.";
+  if (!PRICE_PATTERN.test(priceText) || price < 0.01 || price > 1_000_000) {
+    fieldErrors.price = "Un precio entre 0,01 y 1.000.000, con hasta 2 decimales.";
   }
 
   const stockText = text(formData, "stock");

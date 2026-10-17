@@ -178,7 +178,7 @@ export function ProductForm({
       </Field>
 
       <div className="grid gap-5 sm:grid-cols-3">
-        <Field id="price" label="Precio (CUP)" error={errors.price}>
+        <Field id="price" label="Precio" error={errors.price}>
           <Input
             id="price"
             name="price"

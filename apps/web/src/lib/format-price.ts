@@ -1,4 +1,3 @@
 export function formatPrice(value: number): string {
-  const decimals = Number.isInteger(value) ? 0 : 2;
-  return `${value.toLocaleString("es", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} CUP`;
+  return `$${value.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

@@ -28,7 +28,7 @@ export function formatValue(kind: ValueKind, value: number | null | undefined): 
 }
 
 export function formatAxisValue(kind: ValueKind, value: number): string {
-  return kind === "money" ? `${COMPACT.format(value)} CUP` : COMPACT.format(value);
+  return kind === "money" ? `$${COMPACT.format(value)}` : COMPACT.format(value);
 }
 
 export function formatRange(from: string, to: string): string {

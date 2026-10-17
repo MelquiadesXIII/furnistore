@@ -7,6 +7,7 @@ import { parseAccountForm, type AccountActionResult } from "@/modules/account/ac
 import type { AdminActionResult } from "@/modules/admin/action-result";
 import {
   changeCustomerAccount,
+  deleteAdminCustomer,
   updateAdminCustomer,
   type AccountAction,
 } from "@/modules/admin/customers/api";
@@ -63,4 +64,18 @@ export async function changeAccount(id: unknown, action: unknown): Promise<Admin
 
   revalidatePath("/", "layout");
   return result.ok ? { ok: true } : { ok: false, message: adminErrorMessage(result.error) };
+}
+
+export async function deleteCustomer(id: unknown): Promise<{ ok: false; message: string }> {
+  if (!isId(id)) return { ok: false, message: "Cliente no válido." };
+
+  const result = await deleteAdminCustomer(id);
+
+  if (!result.ok) {
+    if (result.error.kind === "unauthorized") redirect(`/login?next=/admin/customers/${id}`);
+    return { ok: false, message: adminErrorMessage(result.error) };
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/admin/customers");
 }

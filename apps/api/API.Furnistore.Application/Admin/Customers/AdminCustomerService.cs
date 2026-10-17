@@ -25,6 +25,8 @@ namespace API.Furnistore.Application.Admin.Customers
 
         private const int RoleChangeLockNamespace = 3005;
 
+        private const int CheckoutLockNamespace = 3004;
+
         private static readonly SortMap<CustomerRow> Sorts = new SortMap<CustomerRow>()
             .Add("name", row => row.Client.LastName)
             .Add("email", row => row.User.Email)
@@ -314,6 +316,88 @@ namespace API.Furnistore.Application.Admin.Customers
                 target.Role = RoleChange.Revoke;
                 return new Change(AuditActions.AdminRevoked, "ya no es administradora", ApiEvents.AdminRoleRevoked);
             });
+
+        public async Task<Result> DeleteAsync(int id, string actorUserId, CancellationToken cancellationToken)
+        {
+            var strategy = db.Database.CreateExecutionStrategy();
+
+            var outcome = await strategy.ExecuteAsync(async () =>
+            {
+                db.ChangeTracker.Clear();
+                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+                await db.Database.ExecuteSqlAsync(
+                    $"SELECT pg_advisory_xact_lock({CheckoutLockNamespace}, {id})",
+                    cancellationToken
+                );
+
+                var found = await (
+                    from client in db.Clients
+                    join user in db.Users on client.UserId equals user.Id
+                    where client.ID == id
+                    select new { Client = client, User = user }
+                ).FirstOrDefaultAsync(cancellationToken);
+
+                if (found is null)
+                    return (Error?)NotFound(id);
+
+                var adminRoleId = await AdminRoleIdAsync(cancellationToken);
+
+                Error? rejection = null;
+
+                if (found.User.Id == actorUserId)
+                    rejection = Error.Conflict("customer.self_action", "No puedes borrar tu propia cuenta.");
+                else if (
+                    adminRoleId is not null
+                    && await db.UserRoles.AnyAsync(
+                        ur => ur.UserId == found.User.Id && ur.RoleId == adminRoleId,
+                        cancellationToken
+                    )
+                )
+                    rejection = Error.Conflict(
+                        "customer.is_admin",
+                        "Quítale el rol de administrador antes de borrar la cuenta."
+                    );
+                else if (await db.Orders.AnyAsync(o => o.ClientId == id, cancellationToken))
+                    rejection = Error.Conflict(
+                        "customer.has_orders",
+                        "Este cliente tiene pedidos y no se puede borrar. Desactívalo en su lugar."
+                    );
+
+                if (rejection is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    logger.LogWarning(
+                        ApiEvents.CustomerActionRejected,
+                        "Deletion of client {ClientId} by {UserId} rejected: {Code}",
+                        id,
+                        actorUserId,
+                        rejection.Code
+                    );
+                    return rejection;
+                }
+
+                db.Clients.Remove(found.Client);
+                db.Users.Remove(found.User);
+
+                audit.Record(
+                    actorUserId,
+                    AuditActions.CustomerDeleted,
+                    AuditEntities.Customer,
+                    id,
+                    $"Cliente {found.Client.FirstName} {found.Client.LastName} ({found.User.Email}) borrado"
+                );
+
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                logger.LogInformation(ApiEvents.ClientDeleted, "Client {ClientId} deleted by {UserId}", id, actorUserId);
+
+                return null;
+            });
+
+            return outcome is null ? Result.Ok() : Result.Fail(outcome);
+        }
 
         public async Task<int?> FindIdByEmailAsync(string email, CancellationToken cancellationToken)
         {

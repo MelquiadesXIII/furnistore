@@ -36,6 +36,7 @@ namespace API.Furnistore.Application.Admin.Audit
         public const string CustomerUnlocked = "customer.unlocked";
         public const string CustomerDisabled = "customer.disabled";
         public const string CustomerEnabled = "customer.enabled";
+        public const string CustomerDeleted = "customer.deleted";
         public const string AdminGranted = "customer.admin_granted";
         public const string AdminRevoked = "customer.admin_revoked";
         public const string ReportExported = "report.exported";

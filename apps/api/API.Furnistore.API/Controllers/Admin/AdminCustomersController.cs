@@ -28,6 +28,13 @@ namespace API.Furnistore.API.Controllers.Admin
         public async Task<IActionResult> Update(int id, UpdateCustomerRequest request, CancellationToken cancellationToken) =>
             (await customers.UpdateAsync(id, request, User.UserId(), cancellationToken)).ToActionResult(this);
 
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken) =>
+            (await customers.DeleteAsync(id, User.UserId(), cancellationToken)).ToNoContentResult(this);
+
         [HttpPost("{id:int}/unlock")]
         [ProducesResponseType<AdminCustomerResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

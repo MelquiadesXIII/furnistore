@@ -48,3 +48,7 @@ export function changeCustomerAccount(id: number, action: AccountAction): Promis
   const route = ACCOUNT_ROUTES[action];
   return authedApiFetch<AdminCustomer>(`/api/admin/customers/${id}/${route.path}`, { method: route.method });
 }
+
+export function deleteAdminCustomer(id: number): Promise<Result<void>> {
+  return authedApiFetch<void>(`/api/admin/customers/${id}`, { method: "DELETE" });
+}

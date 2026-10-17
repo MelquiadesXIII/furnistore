@@ -2,23 +2,25 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { changeAccount } from "@/modules/admin/customers/actions";
+import { changeAccount, deleteCustomer } from "@/modules/admin/customers/actions";
 import type { AccountAction } from "@/modules/admin/customers/api";
 import type { AdminCustomer } from "@/modules/admin/customers/types";
 
-const CONFIRMATIONS: Partial<Record<AccountAction, string>> = {
+type CustomerAction = AccountAction | "delete";
+
+const CONFIRMATIONS: Partial<Record<CustomerAction, string>> = {
   disable: "La persona no podrá iniciar sesión y se cierran sus sesiones abiertas.",
   "revoke-admin": "Pierde el acceso al panel cuando vuelva a iniciar sesión.",
   "grant-admin": "Tendrá acceso completo al panel cuando vuelva a iniciar sesión.",
 };
 
 export function AccountActions({ customer, isSelf }: { customer: AdminCustomer; isSelf: boolean }) {
-  const [confirming, setConfirming] = useState<AccountAction | null>(null);
+  const [confirming, setConfirming] = useState<CustomerAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { account } = customer;
 
-  const actions: { action: AccountAction; label: string; destructive?: boolean; hint?: string }[] = [];
+  const actions: { action: CustomerAction; label: string; destructive?: boolean; hint?: string }[] = [];
 
   if (!account.isDisabled && (account.lockedOutUntil || account.failedLoginCount > 0)) {
     actions.push({ action: "unlock", label: "Desbloquear inicio de sesión" });
@@ -54,10 +56,28 @@ export function AccountActions({ customer, isSelf }: { customer: AdminCustomer; 
     });
   }
 
-  function run(action: AccountAction) {
+  actions.push({
+    action: "delete",
+    label: "Borrar cliente",
+    destructive: true,
+    hint: isSelf
+      ? "No puedes borrar tu propia cuenta."
+      : account.isAdmin
+        ? "Quítale el rol de administrador antes de borrarla."
+        : customer.orderCount > 0
+          ? `Tiene ${customer.orderCount} ${customer.orderCount === 1 ? "pedido" : "pedidos"}: desactívala en su lugar.`
+          : undefined,
+  });
+
+  const confirmations: Partial<Record<CustomerAction, string>> = {
+    ...CONFIRMATIONS,
+    delete: `¿Borrar la cuenta de ${customer.firstName} ${customer.lastName} para siempre? Nunca compró, así que no afecta pedidos ni reportes.`,
+  };
+
+  function run(action: CustomerAction) {
     setError(null);
     startTransition(async () => {
-      const result = await changeAccount(customer.id, action);
+      const result = action === "delete" ? await deleteCustomer(customer.id) : await changeAccount(customer.id, action);
       setConfirming(null);
       if (!result.ok) setError(result.message);
     });
@@ -68,7 +88,7 @@ export function AccountActions({ customer, isSelf }: { customer: AdminCustomer; 
       {actions.map(({ action, label, destructive, hint }) =>
         confirming === action ? (
           <div key={action} className="flex flex-col gap-2 rounded-sm border border-brick/40 p-3">
-            <p className="text-sm text-ink">{CONFIRMATIONS[action]}</p>
+            <p className="text-sm text-ink">{confirmations[action]}</p>
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -77,7 +97,7 @@ export function AccountActions({ customer, isSelf }: { customer: AdminCustomer; 
                 disabled={pending}
                 onClick={() => run(action)}
               >
-                {pending ? "Guardando…" : "Confirmar"}
+                {pending ? (action === "delete" ? "Borrando…" : "Guardando…") : "Confirmar"}
               </Button>
               <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setConfirming(null)}>
                 Cancelar
@@ -91,7 +111,7 @@ export function AccountActions({ customer, isSelf }: { customer: AdminCustomer; 
               variant="outline"
               className={destructive ? "text-brick hover:text-brick" : undefined}
               disabled={pending || Boolean(hint)}
-              onClick={() => (CONFIRMATIONS[action] ? setConfirming(action) : run(action))}
+              onClick={() => (confirmations[action] ? setConfirming(action) : run(action))}
             >
               {label}
             </Button>

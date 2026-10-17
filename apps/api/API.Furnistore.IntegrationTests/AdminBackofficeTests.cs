@@ -4,6 +4,7 @@ using API.Furnistore.Application.Admin.Customers;
 using API.Furnistore.Application.Admin.Orders;
 using API.Furnistore.Application.Admin.Products;
 using API.Furnistore.Application.Clients;
+using API.Furnistore.Application.Orders;
 using API.Furnistore.Shared;
 using API.Furnistore.Shared.Common;
 using Microsoft.EntityFrameworkCore;
@@ -215,6 +216,81 @@ namespace API.Furnistore.IntegrationTests
             Assert.Equal("customer.not_locked", again.Error!.Code);
         }
 
+        [Fact]
+        public async Task A_customer_who_never_ordered_is_deleted_with_their_account_cart_and_sessions()
+        {
+            var (userId, clientId) = await data.CreateClientAsync(profileComplete: false);
+            var product = await data.CreateProductAsync("Silla sin comprar", 30m, stock: 5);
+            await data.AddToCartAsync(clientId, product, 2);
+
+            string email;
+            await using (var db = fixture.CreateContext())
+            {
+                email = (await db.Users.SingleAsync(u => u.Id == userId)).Email!;
+                db.RefreshTokens.Add(new RefreshToken
+                {
+                    JwtId = Guid.NewGuid().ToString(),
+                    TokenHash = Guid.NewGuid().ToString("N"),
+                    AddedDate = DateTime.UtcNow,
+                    ExpiryDate = DateTime.UtcNow.AddDays(30),
+                    UserId = userId,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var deleted = await DeleteCustomer(clientId, "admin-1");
+            Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+
+            await using (var db = fixture.CreateContext())
+            {
+                Assert.False(await db.Clients.AnyAsync(c => c.ID == clientId));
+                Assert.False(await db.Users.AnyAsync(u => u.Id == userId));
+                Assert.False(await db.CartItems.AnyAsync(i => i.ClientId == clientId));
+                Assert.False(await db.RefreshTokens.AnyAsync(t => t.UserId == userId));
+                Assert.Equal(5, await db.Products.Where(p => p.Id == product).Select(p => p.Stock).SingleAsync());
+            }
+
+            var entry = Assert.Single(await History(AuditEntities.Customer, clientId));
+            Assert.Equal(AuditActions.CustomerDeleted, entry.Action);
+            Assert.Equal("admin-1", entry.Actor.UserId);
+            Assert.Contains(email, entry.Summary);
+
+            var again = await DeleteCustomer(clientId, "admin-1");
+            Assert.Equal("customer.not_found", again.Error!.Code);
+        }
+
+        [Fact]
+        public async Task A_customer_with_orders_an_admin_or_yourself_cannot_be_deleted()
+        {
+            var (buyerId, buyerClientId) = await data.CreateClientAsync();
+            var product = await data.CreateProductAsync("Mesa cancelada", 90m, stock: 3);
+            var order = await data.PlaceOrderAsync(buyerId, buyerClientId, product, 1, 90m);
+            var cancelled = await fixture.RunAsync<OrderService, Result<OrderResponse>>(service =>
+                service.CancelAsync(order.Id, new CancelOrderRequest { Reason = "Ya no la quiero" }, buyerId, CancellationToken.None)
+            );
+            Assert.True(cancelled.IsSuccess, cancelled.Error?.Message);
+
+            var withOrders = await DeleteCustomer(buyerClientId, "admin-1");
+            Assert.Equal("customer.has_orders", withOrders.Error!.Code);
+
+            var (_, adminClientId) = await data.CreateClientAsync();
+            var granted = await Customers(service => service.GrantAdminAsync(adminClientId, "admin-1", CancellationToken.None));
+            Assert.True(granted.IsSuccess, granted.Error?.Message);
+
+            var admin = await DeleteCustomer(adminClientId, "admin-1");
+            Assert.Equal("customer.is_admin", admin.Error!.Code);
+
+            var (selfId, selfClientId) = await data.CreateClientAsync();
+            var self = await DeleteCustomer(selfClientId, selfId);
+            Assert.Equal("customer.self_action", self.Error!.Code);
+
+            await using var db = fixture.CreateContext();
+            Assert.Equal(3, await db.Clients.CountAsync(c => new[] { buyerClientId, adminClientId, selfClientId }.Contains(c.ID)));
+            Assert.False(await db.AuditEntries.AnyAsync(e => e.Action == AuditActions.CustomerDeleted && (
+                e.EntityId == buyerClientId.ToString() || e.EntityId == adminClientId.ToString() || e.EntityId == selfClientId.ToString()
+            )));
+        }
+
         private static CreateProductRequest NewProduct(string name, int categoryId) =>
             new()
             {
@@ -276,5 +352,10 @@ namespace API.Furnistore.IntegrationTests
 
         private Task<Result<AdminCustomerResponse>> Customers(Func<AdminCustomerService, Task<Result<AdminCustomerResponse>>> action) =>
             fixture.RunAsync(action);
+
+        private Task<Result> DeleteCustomer(int clientId, string actorUserId) =>
+            fixture.RunAsync<AdminCustomerService, Result>(service =>
+                service.DeleteAsync(clientId, actorUserId, CancellationToken.None)
+            );
     }
 }

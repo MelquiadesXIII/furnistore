@@ -1239,7 +1239,7 @@ Las categorías del catálogo (Sillas, Mesas, Estanterías, Lámparas). Solo tie
 
 Los muebles a la venta.
 
-- **Dinero:** `Price` es `numeric(12,2)`: hasta 9.999.999.999,99 con exactamente dos decimales. Nunca se usa `float` ni `double` para dinero, porque redondean en binario (`0.1 + 0.2` no da `0.3`). En C# es `decimal`. Desde el 16 de octubre los precios están en CUP (13.5).
+- **Dinero:** `Price` es `numeric(12,2)`: hasta 9.999.999.999,99 con exactamente dos decimales. Nunca se usa `float` ni `double` para dinero, porque redondean en binario (`0.1 + 0.2` no da `0.3`). En C# es `decimal`. Los precios están en USD: el 16 de octubre se pasaron a CUP y el 17 se devolvieron a USD (13.5).
 - **Restricciones `CHECK`:** precio mayor que 0, stock mayor o igual que 0, y medidas positivas o vacías. Aunque la API ya valida todo esto, la base lo vuelve a comprobar: si un error de programación intentara guardar stock negativo, PostgreSQL lo rechazaría.
 - **`IsActive`:** en lugar de borrar un producto que ya se vendió, se archiva (`false`). Desaparece del catálogo, pero los pedidos antiguos siguen apuntando a él.
 - **`CreatedAt`:** lo rellena la propia base con `now()` al insertar.
@@ -1721,7 +1721,7 @@ Al ejecutarlos verás en la salida un error largo de tipo `HostAbortedException`
 
 **Las migraciones no se aplican solas al arrancar la API.** Se aplican con `database update`, a propósito: un cambio de esquema es una operación delicada que alguien debe decidir y vigilar. Aplicarlas al arrancar haría que dos copias de la API arrancando a la vez intentaran migrar la misma base.
 
-### 13.3 La historia de la base: las 21 migraciones
+### 13.3 La historia de la base: las 22 migraciones
 
 Leerlas en orden es leer la historia del proyecto:
 
@@ -1747,6 +1747,7 @@ Leerlas en orden es leer la historia del proyecto:
 | 10 oct | `AddRefreshTokenUsedAt` | Añade `RefreshTokens.UsedAt` |
 | 11 oct | `AddClientIdentityCard` | Añade el carnet de identidad, único |
 | 16 oct | `ConvertPricesToCup` | Pasa todos los importes a CUP |
+| 17 oct | `ConvertPricesToUsd` | Devuelve todos los importes a USD |
 
 Tres de las primeras tienen espacios en el nombre (`Order Details added`, `Identity to the API` y `Adding Refresh Tokens table`). Funcionan, pero obligan a escribir comillas en la terminal; las demás siguen la convención de C#, `PascalCase`, que es la recomendable.
 
@@ -1838,10 +1839,12 @@ protected override void Up(MigrationBuilder migrationBuilder)
 
 Su `Down` divide por 800, pero no puede recuperar los céntimos que se perdieron al redondear: no todas las migraciones son perfectamente reversibles, y conviene saberlo antes de aplicarlas.
 
+**Deshacer una migración que ya se compartió.** Al día siguiente se decidió volver a USD. `ConvertPricesToCup` ya estaba en el repositorio y alguien podía haberla aplicado, así que no se borró: se escribió otra, `ConvertPricesToUsd`, cuyo `Up` hace lo mismo que el `Down` anterior (divide por 800). Así cualquier base, la haya aplicado o no, termina en USD con un `database update`. Los pedidos, las líneas y la auditoría vuelven exactos. Los cuatro precios que se habían redondeado no recuperan solos sus céntimos (79,90 se queda en 79,88); se corrigen con un `UPDATE` puntual a partir de los valores originales.
+
 ### 13.6 Reglas de trabajo
 
 1. **Nunca edites una migración que ya se aplicó en alguna base.** EF Core no vuelve a ejecutarla: la base y el código quedarían descuadrados. Si algo salió mal, se corrige con una migración nueva.
-2. **Revisa el SQL antes de aplicar** con `migrations script`, sobre todo si la migración transforma datos. Es lo que se hizo con `ConvertPricesToCup`.
+2. **Revisa el SQL antes de aplicar** con `migrations script`, sobre todo si la migración transforma datos. Es lo que se hizo con `ConvertPricesToCup` y `ConvertPricesToUsd`.
 3. **Una migración por cambio con sentido, con un nombre que lo explique.** `AddClientIdentityCard` se entiende sin abrirla; `UpdateModelChanges` no.
 4. **Las migraciones viajan con el código.** Cada compañero tiene su propia base local: después de traer cambios del repositorio, ejecuta `database update` y su base queda igual que la tuya. Los datos no viajan; el esquema sí.
 5. **Nunca toques `__EFMigrationsHistory` ni el *snapshot* a mano.** Si se descuadran, EF Core intentará volver a crear tablas que ya existen, o no aplicará migraciones que faltan.

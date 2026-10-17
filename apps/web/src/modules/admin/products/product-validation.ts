@@ -28,21 +28,17 @@ function text(formData: FormData, field: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function imageHostError(url: string, supabaseUrl: string | undefined): string | null {
+function imageHostError(url: string, apiBaseUrl: string | undefined): string | null {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return "Escribe una URL completa, que empiece por https://.";
+    return "Escribe una URL completa, que empiece por http:// o https://.";
   }
 
-  const allowedHost = supabaseUrl ? new URL(supabaseUrl).hostname : null;
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.hostname !== allowedHost ||
-    !parsed.pathname.startsWith("/storage/v1/object/public/")
-  ) {
-    return "Usa la URL pública de la imagen en el bucket de Supabase.";
+  const allowedOrigin = apiBaseUrl ? new URL(apiBaseUrl).origin : null;
+  if (parsed.origin !== allowedOrigin || !parsed.pathname.startsWith("/assets/")) {
+    return "Usa una imagen subida desde este formulario.";
   }
 
   return url.length > 500 ? "La URL es demasiado larga." : null;
@@ -50,7 +46,7 @@ function imageHostError(url: string, supabaseUrl: string | undefined): string | 
 
 export function parseProductForm(
   formData: FormData,
-  supabaseUrl: string | undefined,
+  apiBaseUrl: string | undefined,
 ): { input: ProductInput; image: File | null; fieldErrors: ProductFieldErrors } {
   const fieldErrors: ProductFieldErrors = {};
 
@@ -79,7 +75,7 @@ export function parseProductForm(
   }
 
   const imageUrl = text(formData, "imageUrl");
-  const imageError = imageUrl ? imageHostError(imageUrl, supabaseUrl) : null;
+  const imageError = imageUrl ? imageHostError(imageUrl, apiBaseUrl) : null;
   if (imageError) fieldErrors.image = imageError;
 
   const file = formData.get("image");

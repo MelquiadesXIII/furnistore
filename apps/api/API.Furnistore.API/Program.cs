@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NLog;
@@ -243,6 +244,14 @@ try
 
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
+
+    var assetsFolder = LocalImageStorage.Folder(app.Environment);
+    Directory.CreateDirectory(assetsFolder);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(assetsFolder),
+        RequestPath = LocalImageStorage.RequestPath,
+    });
 
     app.UseRouting();
     app.UseCors("WebApp");

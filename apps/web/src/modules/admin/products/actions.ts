@@ -31,7 +31,7 @@ async function uploadImage(image: File, loginNext: string): Promise<string | Pro
 }
 
 export async function createProduct(formData: FormData): Promise<ProductFormResult> {
-  const { input, image, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
+  const { input, image, fieldErrors } = parseProductForm(formData, process.env.API_BASE_URL);
   if (Object.keys(fieldErrors).length > 0) return { ok: false, message: INVALID, fieldErrors };
 
   if (image) {
@@ -60,7 +60,7 @@ export async function updateProduct(
     return { ok: false, message: "Producto no válido.", fieldErrors: {} };
   }
 
-  const { input, image, fieldErrors } = parseProductForm(formData, process.env.SUPABASE_URL);
+  const { input, image, fieldErrors } = parseProductForm(formData, process.env.API_BASE_URL);
   if (Object.keys(fieldErrors).length > 0) return { ok: false, message: INVALID, fieldErrors };
 
   if (image) {

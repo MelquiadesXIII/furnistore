@@ -1384,17 +1384,538 @@ Tabla con el número de productos de cada categoría, ordenable por nombre o por
 
 ### 18.6 Reportes — `/admin/reports/{report}`
 
-- **Seis reportes:** ventas, productos, operación, cancelaciones, inventario y clientes. `definitions.ts` los describe (título, nombre de archivo, si usan período y agrupación). `/admin/reports` redirige a `/admin/reports/sales`.
-- **Render:** servidor (`ReportScreenContainer`) para los datos; cliente para los gráficos (Recharts necesita el navegador para medir y animar) y para el menú de exportación.
-- **Período y agrupación** en la URL (`?from=2026-10-01&to=2026-10-11&groupBy=Day`), leídos con un parser propio (`parseAsDay`) que rechaza fechas imposibles como `2026-02-30`.
-- **Exportar:** `ExportMenu` pide `/admin/reports/{report}/pdf` o `/csv` con `fetch`, recibe el archivo como *blob* y lo descarga creando un enlace temporal, con el nombre que viene en `Content-Disposition`.
-- **Los Route Handlers de exportación:**
-  1. Comprueban que el usuario sea administrador.
-  2. Piden los datos a la API.
-  3. Generan el archivo **en el servidor**: el PDF con `@react-pdf/renderer` (`renderToBuffer`), que dibuja el documento con componentes React propios (`PdfReport`, `SalesPdf`…), sin navegador ni programas externos; el CSV con `toCsv`.
-  4. Registran la exportación en la auditoría de la API.
-  5. Devuelven el archivo con `Content-Disposition: attachment` y `Cache-Control: no-store`.
-- `registry.ts` es el único lugar que asocia cada *slug* con su tabla y su PDF. Usa un `switch` sobre un tipo unión, así que si se añade un séptimo reporte, TypeScript marca los sitios que faltan.
+Los reportes convierten lo que la tienda ya guarda (pedidos, líneas de pedido, productos, clientes y auditoría) en respuestas para quien la administra. No existen tablas de reportes: cada cifra se calcula en el momento en que se pide, a partir de los datos vivos. Este apartado explica qué pregunta responde cada reporte, cómo lo calcula la API, cómo lo pinta la web y cómo se convierte en un PDF o un CSV. Es el único apartado del capítulo que baja a la API, porque un reporte no se entiende mirando solo una de las dos mitades.
+
+Dónde está cada pieza (las rutas de la API son relativas a `apps/api/`):
+
+| Pieza | Archivo | Qué contiene |
+|---|---|---|
+| API | `API.Furnistore.Application/Admin/Reports/AdminReportService.cs` | Un método por reporte y el registro de exportaciones |
+| API | `…/Admin/Reports/ReportPeriod.cs` | El período: fechas por defecto, zona horaria, agrupación y tramos |
+| API | `…/Admin/Reports/ReportContracts.cs` | Las respuestas: `SalesReport`, `ProductsReport`… |
+| API | `API.Furnistore.API/Controllers/Admin/AdminReportsController.cs` | `GET /api/admin/reports/{reporte}` y `POST /api/admin/reports/exports` |
+| Web | `modules/admin/reports/definitions.ts` | Los seis reportes: título, nombre de archivo, si usan período y agrupación |
+| Web | `modules/admin/reports/registry.ts` | Cargar un reporte y obtener su tabla |
+| Web | `modules/admin/reports/screen/` y `shared/` | La pantalla: contenedor, pestañas, barra de herramientas, menú de exportación |
+| Web | `modules/admin/reports/views/<reporte>/` | Por reporte: la vista de pantalla, la tabla y el PDF |
+| Web | `modules/admin/reports/charts/` | Los gráficos de pantalla (Recharts) |
+| Web | `modules/admin/reports/pdf/` | El marco del PDF, sus gráficos y `renderReportPdf` |
+| Web | `modules/admin/reports/export/` | El CSV y la respuesta de descarga |
+| Web | `app/(admin)/admin/reports/[report]/` | La página y los Route Handlers `pdf/` y `csv/` |
+
+#### 18.6.1 Qué se quiere lograr
+
+Sin reportes, saber cómo va la tienda obligaría a abrir los pedidos uno por uno. Cada reporte responde **una** pregunta de negocio y sirve para tomar una decisión concreta:
+
+| Reporte | Pregunta | Sirve para decidir… |
+|---|---|---|
+| Ventas | ¿Cuánto vendimos y cómo evoluciona? | Si la tienda crece y en qué días o semanas se vende más |
+| Productos | ¿Qué se vende y qué no? | Qué reponer o destacar, y qué rebajar o retirar |
+| Operación | ¿Cumplimos con las entregas? | Dónde se atascan los pedidos y cuáles atender ya |
+| Cancelaciones | ¿Cuánto perdemos y quién cancela? | Si el problema está en la oferta (cancela el cliente) o en la operación (cancela la administración) |
+| Inventario | ¿Qué tenemos y qué falta? | Qué reponer primero |
+| Clientes | ¿Quién compra y desde dónde? | A quién cuidar y dónde concentrar el reparto |
+
+Los seis tienen la misma forma, y no por casualidad:
+
+1. **Tarjetas con las cifras clave:** la respuesta corta, la que se lee en dos segundos.
+2. **Un gráfico:** la forma de los datos (una evolución, un ranking o un reparto), que una tabla no deja ver.
+3. **Una tabla:** el detalle. Cuando una fila es un pedido, un producto o un cliente, enlaza con su ficha, para pasar de mirar a actuar.
+
+Se mantuvieron sencillos a propósito. Un reporte con diez gráficos no responde nada; uno con una pregunta clara, sí.
+
+**Reglas comunes a todos.**
+
+- **Qué cuenta como venta:** un pedido que no está cancelado. El pago se registra al confirmar la compra, así que un pedido Pagado, En preparación, Enviado o Entregado es dinero cobrado. La condición `o.Status != OrderStatus.Cancelled` aparece en Ventas, Productos y Clientes.
+- **A qué día pertenece un pedido:** al de su compra (`PlacedAt`), contado en la hora de La Habana (18.6.2). Un pedido comprado el 30 y entregado el 2 cuenta el 30.
+- **Importes históricos:** se suman los importes guardados en el pedido (`Order.Total`, `OrderDetail.UnitPrice`), no el precio actual del producto. Si mañana una silla sube de precio, las ventas de ayer no cambian.
+- **Moneda:** la de la tienda, `StoreCalendar.Currency` (USD). La API la devuelve en cada respuesta (`meta.currency`) y el PDF la imprime en la cabecera.
+
+#### 18.6.2 El período: fechas, zona horaria y agrupación
+
+Casi todos los reportes trabajan sobre un rango de fechas, y eso obliga a decidir tres cosas: qué días, en qué zona horaria y agrupados cómo.
+
+**Qué días.** El rango viaja en la URL: `/admin/reports/sales?from=2026-09-18&to=2026-10-17&groupBy=Week`. Todo es opcional. La web solo comprueba el formato (`parseAsDay`, en `search-params.ts`, rechaza fechas imposibles como `2026-02-30`) y pasa los valores a la API, que resuelve el resto en `ReportPeriod.Resolve`:
+
+```csharp
+var to = query.To ?? today;
+var from = query.From ?? to.AddDays(-29);
+
+if (from > to)
+    return Result.Fail<ReportPeriod>(
+        Error.Validation("report.invalid_range", "La fecha inicial no puede ser posterior a la final.")
+    );
+
+var days = to.DayNumber - from.DayNumber + 1;
+if (days > MaxDays)
+    return Result.Fail<ReportPeriod>(
+        Error.Validation("report.range_too_long", "El rango no puede superar los 3 años.")
+    );
+```
+
+Sin fechas, el reporte cubre los últimos 30 días, hoy incluido. El tope de 1096 días (3 años) evita que alguien pida medio siglo y el servidor calcule miles de tramos para nada.
+
+**En qué zona horaria.** La base guarda los momentos en UTC (`PlacedAt` es `timestamptz`), pero "el 17 de octubre" de la tienda es un día de La Habana: desde las 00:00 del 17 hasta las 00:00 del 18, hora local. `ReportPeriod` convierte el rango en dos instantes UTC, y las consultas los usan como **intervalo semiabierto**:
+
+```csharp
+public DateTime StartUtc => StoreCalendar.StartOfDayUtc(From);
+
+public DateTime EndUtc => StoreCalendar.StartOfDayUtc(To.AddDays(1));
+```
+
+```csharp
+.Where(o => o.PlacedAt >= start && o.PlacedAt < end)
+```
+
+El final es el comienzo del día siguiente y se compara con `<`, no con `<=`. Así dos períodos seguidos ni se pisan ni dejan huecos, y no hace falta inventar un "23:59:59.999" que siempre deja fuera algún instante.
+
+**La medianoche que no existe.** Cuba adelanta la hora justo a medianoche: el 8 de marzo de 2026 el reloj salta de las 23:59:59 del día 7 a la 01:00 del día 8. Ese día las 00:00 no existen, y pedir su equivalente en UTC lanzaría una excepción. `StartOfDayUtc` lo prevé:
+
+```csharp
+public static DateTime StartOfDayUtc(DateOnly day)
+{
+    var local = day.ToDateTime(TimeOnly.MinValue);
+    while (Zone.IsInvalidTime(local))
+        local = local.AddMinutes(30);
+    return TimeZoneInfo.ConvertTimeToUtc(local, Zone);
+}
+```
+
+Si la hora no existe, avanza de media en media hora hasta encontrar una válida: ese día empieza a la 01:00 local, que son las 05:00 UTC. Sin ese bucle, cualquier reporte que incluyera el 8 de marzo fallaría.
+
+**Agrupados cómo.** Solo Ventas dibuja una serie en el tiempo, y ahí importa el tamaño del tramo: un año día a día son 365 puntos ilegibles, y una semana agrupada por meses es una sola barra. La API decide qué agrupaciones tienen sentido según la longitud del rango:
+
+| Días del rango | Agrupaciones posibles | Por defecto |
+|---|---|---|
+| 1 a 13 | Día | Día |
+| 14 a 31 | Día, semana | Día |
+| 32 a 55 | Día, semana | Semana |
+| 56 a 93 | Día, semana, mes | Semana |
+| 94 a 180 | Semana, mes | Semana |
+| 181 a 731 | Semana, mes | Mes |
+| 732 a 1096 | Mes | Mes |
+
+Si la URL pide una agrupación que no corresponde (`groupBy=Day` con un año), la API usa la de por defecto sin dar error. En `meta` devuelve la que usó (`groupBy`) y las posibles (`availableGroupings`), y la web dibuja el selector "Agrupar" con esa lista, solo si hay más de una opción. Las reglas viven en un único sitio: la API. Al cambiar las fechas, la barra de herramientas borra `groupBy` de la URL para que la API elija la agrupación adecuada al nuevo rango.
+
+**Los tramos.** `ReportPeriod.Buckets()` corta el rango en tramos: un día, una semana de lunes a domingo o un mes natural. El primero y el último se recortan al rango; si empieza un miércoles, la primera "semana" va de miércoles a domingo. El final de cada semana sale de esta fórmula:
+
+```csharp
+ReportGrouping.Week => start.AddDays(6 - ((int)start.DayOfWeek + 6) % 7),
+```
+
+En .NET, `DayOfWeek` cuenta el domingo como 0. `((int)start.DayOfWeek + 6) % 7` lo convierte en "días desde el lunes" (lunes 0, domingo 6), y la resta da los días que faltan hasta el domingo.
+
+**En la web.** Los atajos de la barra ("Últimos 7 días", "Este mes", "Mes anterior", "Este trimestre", "Este año"…) se calculan en `shared/date-presets.ts` a partir de **hoy en La Habana**: `storeToday()` usa `Intl.DateTimeFormat` con `timeZone: "America/Havana"`, el mismo calendario que la API. Si las fechas no coinciden con ningún atajo, el selector muestra "Personalizado".
+
+#### 18.6.3 Ventas
+
+**Pregunta:** ¿cuánto vendimos y cómo evoluciona?
+
+**Qué muestra.**
+
+- Tarjetas: ingresos, pedidos, ticket promedio (ingresos ÷ pedidos) y unidades vendidas.
+- Gráfico de área: ingresos por día, semana o mes.
+- Tabla "Ventas por período": pedidos, unidades e ingresos de cada tramo.
+
+**Cómo se calcula.** En dos pasos. Primero, una consulta agrupa por día **local** dentro de la base:
+
+```csharp
+var days = await db
+    .Orders.AsNoTracking()
+    .Where(o => o.Status != OrderStatus.Cancelled && o.PlacedAt >= start && o.PlacedAt < end)
+    .GroupBy(o => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(o.PlacedAt, StoreCalendar.TimeZoneId).Date)
+    .Select(g => new
+    {
+        Day = g.Key,
+        Revenue = g.Sum(o => o.Total),
+        Orders = g.Count(),
+        Units = g.Sum(o => o.OrderDetails.Sum(d => d.Quantity)),
+    })
+    .ToListAsync(cancellationToken);
+```
+
+Npgsql traduce `ConvertTimeBySystemTimeZoneId` a `AT TIME ZONE` y `.Date` a `date_trunc`, así que la agrupación ocurre en PostgreSQL. SQL simplificado, sin las unidades:
+
+```sql
+SELECT date_trunc('day', o."PlacedAt" AT TIME ZONE 'America/Havana') AS "Day",
+       sum(o."Total") AS "Revenue",
+       count(*) AS "Orders"
+FROM "Orders" AS o
+WHERE o."Status" <> 'Cancelled' AND o."PlacedAt" >= @start AND o."PlacedAt" < @end
+GROUP BY 1;
+```
+
+La base devuelve como mucho una fila por cada día **con ventas**. El segundo paso, en C#, reparte esos días entre los tramos:
+
+```csharp
+var series = period
+    .Buckets()
+    .Select(bucket =>
+    {
+        var inside = days.Where(day => bucket.Contains(DateOnly.FromDateTime(day.Day))).ToList();
+        return new SalesPoint(
+            bucket.Start,
+            bucket.End,
+            inside.Sum(day => day.Revenue),
+            inside.Sum(day => day.Orders),
+            inside.Sum(day => day.Units)
+        );
+    })
+    .ToList();
+```
+
+**Por qué en dos pasos.**
+
+- **Los días sin ventas aparecen con cero.** La serie recorre el calendario (`Buckets()`), no las filas de la consulta. Si solo se dibujaran los días con ventas, el gráfico uniría el lunes con el jueves como si fueran seguidos y escondería justo los días malos.
+- **Una sola definición de semana y de mes.** Agrupar por semanas en SQL obligaría a repetir allí qué es una semana (¿empieza en lunes?, ¿en qué zona horaria?). Así la regla está una sola vez, en `Buckets()`.
+- **Es barato:** como mucho llegan 1096 filas, una por día del rango.
+
+Las cifras de las tarjetas son sumas de la serie, así que tarjetas, gráfico y tabla cuadran siempre. El ticket promedio usa `ReportMath.Average`, que devuelve 0 cuando no hubo pedidos en lugar de dividir entre cero.
+
+#### 18.6.4 Productos
+
+**Pregunta:** ¿qué se vende y qué no?
+
+**Qué muestra.**
+
+- Tarjetas: ingresos por productos, cuántos productos distintos se vendieron y cuántos productos activos no vendieron nada.
+- Barras horizontales: los 10 que más ingresaron.
+- Tabla "Ventas por producto": todos los vendidos, con su categoría, unidades, ingresos y porcentaje del total.
+
+**Cómo se calcula.** Una consulta une las líneas con los pedidos (para filtrar por estado y fecha) y con los productos (para el nombre y la categoría), y agrupa por producto:
+
+```csharp
+var sold = await (
+    from detail in db.OrderDetails
+    join order in db.Orders on detail.OrderId equals order.Id
+    join product in db.Products on detail.ProductId equals product.Id
+    where order.Status != OrderStatus.Cancelled && order.PlacedAt >= start && order.PlacedAt < end
+    group detail by new { product.Id, product.Name, Category = product.Category.Name } into g
+    select new
+    {
+        g.Key.Id,
+        g.Key.Name,
+        g.Key.Category,
+        Units = g.Sum(d => d.Quantity),
+        Revenue = g.Sum(d => d.Quantity * d.UnitPrice),
+    }
+).ToListAsync(cancellationToken);
+```
+
+Después, en C#, se ordena por ingresos y se calcula la parte de cada producto con `ReportMath.Share`, redondeada a 4 decimales (0 si el total es 0). Los activos sin ventas salen de otra consulta:
+
+```csharp
+var unsold = await db
+    .Products.AsNoTracking()
+    .CountAsync(p => p.IsActive && p.CreatedAt < end && !soldIds.Contains(p.Id), cancellationToken);
+```
+
+**Detalles que importan.**
+
+- **"Sin envío".** Los ingresos salen de las líneas (cantidad × precio unitario), no de `Order.Total`. Hoy el envío es gratis y la cifra coincide con la de Ventas; si algún día se cobra, la diferencia entre los dos reportes será exactamente lo cobrado por envío. Por eso la tarjeta lo aclara.
+- **Solo cuenta lo que se podía vender.** Un producto archivado, o creado después del período, no aparece como "sin ventas": no se le puede reprochar.
+- **El nombre es el actual.** La consulta toma el nombre de `Products`, no la copia guardada en la línea del pedido. Si un producto se renombra, sus ventas antiguas aparecen con el nombre nuevo y siguen sumándose en una sola fila.
+
+**Para qué sirve.** El porcentaje muestra la concentración: si tres productos hacen el 70 % de los ingresos, la tienda depende de ellos y no pueden quedarse sin stock. Los activos sin ventas son candidatos a destacarse, rebajarse o retirarse.
+
+#### 18.6.5 Operación
+
+**Pregunta:** ¿cumplimos con las entregas?
+
+**Qué muestra.**
+
+- Tarjetas: pedidos del período, porcentaje entregado a tiempo ("3 de 4 entregados") y pedidos atrasados ahora.
+- Barras: pedidos del período por estado, cada uno con su color.
+- Tabla "Pedidos atrasados": pedido, cliente, estado, entrega estimada, días de atraso y total.
+
+**Cómo se calcula.** Para el período basta con traer tres columnas de cada pedido y contar en memoria:
+
+```csharp
+var orders = await db
+    .Orders.AsNoTracking()
+    .Where(o => o.PlacedAt >= start && o.PlacedAt < end)
+    .Select(o => new { o.Status, o.DeliveredAt, o.EstimatedDeliveryDate })
+    .ToListAsync(cancellationToken);
+
+var statuses = Enum.GetValues<OrderStatus>()
+    .Select(status => new StatusCountRow(status, orders.Count(o => o.Status == status)))
+    .ToList();
+
+var delivered = orders.Where(o => o.DeliveredAt != null).ToList();
+var onTime = delivered.Count(o => StoreCalendar.DateOf(o.DeliveredAt!.Value) <= o.EstimatedDeliveryDate);
+```
+
+- **Todos los estados, aunque valgan cero.** Se recorre `Enum.GetValues<OrderStatus>()`, no los estados que aparecen en los datos. Una barra en cero también es información: "no hay nada atascado en preparación".
+- **"A tiempo"** significa entregado (con fecha de La Habana) no más tarde que la fecha estimada. El checkout fija esa fecha en el día de la compra más 7 días (`ShippingPolicy.DeliveryLeadDays`).
+- **Sin entregas no hay porcentaje.** Si no se entregó nada, `OnTimeRate` es `null` y la tarjeta muestra "—". 0 de 0 no es un 0 %: no entregar nada no equivale a entregarlo todo tarde.
+
+Los atrasados salen de otra consulta y **no dependen del período**: son los pedidos abiertos (Pagado, En preparación o Enviado) cuya fecha estimada ya pasó, del más antiguo al más reciente, con los días de atraso contados hasta hoy.
+
+```csharp
+var open = new[] { OrderStatus.Paid, OrderStatus.Processing, OrderStatus.Shipped };
+…
+where open.Contains(order.Status) && order.EstimatedDeliveryDate < today
+orderby order.EstimatedDeliveryDate
+```
+
+Lo urgente es lo que está atrasado **hoy**, aunque se haya comprado hace dos meses. Por eso la tarjeta dice "Atrasados ahora".
+
+**Para qué sirve.** Las barras señalan el cuello de botella: muchos pedidos en Pagado significa que la preparación no da abasto. El porcentaje mide si se cumple la promesa de 7 días. La tabla es la lista de tareas: cada fila abre el pedido para prepararlo o enviarlo.
+
+#### 18.6.6 Cancelaciones
+
+**Pregunta:** ¿cuánto perdemos por cancelaciones y quién cancela?
+
+**Qué muestra.**
+
+- Tarjetas: pedidos cancelados, tasa de cancelación e ingresos perdidos.
+- Dona "Quién cancela": cliente, administración o sin registro.
+- Tabla "Pedidos cancelados": pedido, cliente, fecha de cancelación, quién canceló, motivo y total.
+
+**Cómo se calcula.**
+
+- **La tasa compara grupos iguales.** El denominador son todos los pedidos comprados en el período, en cualquier estado; el numerador, los de ese mismo grupo que hoy están cancelados. Los dos se filtran por fecha de compra. Si el numerador se filtrara por fecha de cancelación, contaría pedidos comprados en otro período y la división dejaría de tener sentido.
+- **Ingresos perdidos** es la suma de los totales cancelados: el dinero que hubo que devolver.
+- **Quién canceló no está en el pedido, sino en la auditoría.** Cada cancelación registra una entrada `order.cancelled` con su autor (`ActorUserId`). El reporte busca esas entradas y compara el autor con el dueño del pedido:
+
+```csharp
+var cancelledBy =
+    actor == null ? CancellationActor.Unknown
+    : actor.ActorUserId == order.UserId ? CancellationActor.Customer
+    : CancellationActor.Admin;
+```
+
+Si coinciden, canceló el cliente; si no, un administrador; si no hay entrada, "Sin registro". Ese tercer caso existe porque la auditoría se añadió el 10 de octubre: los pedidos cancelados antes no tienen autor conocido, y el reporte lo dice en lugar de adivinar. Reutilizar la auditoría evita añadir al pedido una columna "cancelado por" que repetiría el mismo dato. Un detalle técnico: `AuditEntries.EntityId` es texto, porque sirve para cualquier entidad, así que los ids se convierten con `ToString(CultureInfo.InvariantCulture)` antes de compararlos.
+
+**Para qué sirve.** El cliente solo puede cancelar mientras el pedido está Pagado. Si los clientes cancelan mucho, hay dudas sobre el producto o el precio; si cancela mucho la administración, el problema es operativo (falta de stock, direcciones imposibles). El motivo escrito completa el porqué.
+
+#### 18.6.7 Inventario
+
+**Pregunta:** ¿qué tenemos y qué hay que reponer?
+
+**Qué muestra.**
+
+- Tarjetas: valor del inventario, productos activos, agotados y con stock bajo ("3 unidades o menos").
+- Barras: cuántos productos están agotados, con stock bajo o bien.
+- Tabla "Stock por producto": stock, precio, valor y estado, **del menor stock al mayor**, para que lo urgente quede arriba.
+
+**Cómo se calcula.** Con una sola consulta sobre los productos activos. El nivel de stock se decide dentro de la propia consulta, porque EF Core traduce el operador `?:` a un `CASE WHEN`:
+
+```csharp
+p.Stock == 0 ? StockLevel.OutOfStock
+: p.Stock <= LowStockThreshold ? StockLevel.Low
+: StockLevel.Healthy
+```
+
+El umbral, `LowStockThreshold = 3`, es una constante de la API que viaja en la respuesta (`lowStockThreshold`). La web escribe "3 unidades o menos" con ese valor, sin repetir el número.
+
+**Detalles que importan.**
+
+- **Es una foto de ahora, no un período.** El stock no tiene historial: solo se sabe cuánto hay hoy. La API resuelve igualmente un período, para que `meta` tenga la misma forma en los seis reportes, pero la web oculta las fechas ("Este reporte muestra el stock de hoy, no depende de fechas") y el PDF dice "Stock al día de hoy". Lo controla `usesPeriod: false` en `definitions.ts`.
+- **El valor es a precio de venta.** La tienda no guarda cuánto costó cada mueble, así que el valor es "lo que ingresaríamos si vendiéramos todo", no el valor contable. La tarjeta lo aclara.
+- **Los archivados no cuentan**, porque no están a la venta.
+
+#### 18.6.8 Clientes
+
+**Pregunta:** ¿quién compra y desde dónde?
+
+**Qué muestra.**
+
+- Tarjetas: compradores, nuevos (su primera compra fue en el período) y recurrentes (ya habían comprado antes).
+- Barras horizontales: ingresos por provincia, las 10 primeras.
+- Tabla "Mejores clientes": los 10 que más gastaron, con correo, pedidos y total.
+
+**Cómo se calcula.** Tres de las cuatro consultas parten del mismo filtro, escrito una vez:
+
+```csharp
+var orders = db
+    .Orders.AsNoTracking()
+    .Where(o => o.Status != OrderStatus.Cancelled && o.PlacedAt >= start && o.PlacedAt < end);
+```
+
+`orders` es un `IQueryable`: todavía no se ha ejecutado nada. Cada `await` posterior lo completa con algo distinto (`Distinct`, `GroupBy`, un `join`) y envía su propia consulta SQL con el mismo `WHERE`. Es la composición de consultas que explica el apartado 11.4 de la guía de la API.
+
+- **Nuevos y recurrentes.** De cada comprador del período se busca su **primera compra de toda la historia**. Si cae dentro del período, es nuevo; si no, recurrente:
+
+```csharp
+var newBuyers = await db
+    .Orders.AsNoTracking()
+    .Where(o => o.Status != OrderStatus.Cancelled && buyerIds.Contains(o.ClientId))
+    .GroupBy(o => o.ClientId)
+    .CountAsync(g => g.Min(o => o.PlacedAt) >= start, cancellationToken);
+```
+
+- **Provincias.** Se agrupa por `ShipToProvince`, la provincia **copiada en el pedido** al comprar, no la que el cliente tiene hoy en su perfil. Si alguien se muda, sus compras antiguas siguen contando donde se entregaron.
+- **Mejores clientes.** La consulta une pedidos, clientes y usuarios (el correo vive en `AspNetUsers`, como explica el capítulo 10 de la guía de la API), agrupa por cliente, ordena por lo gastado y se queda con 10 (`Take(10)`, que en SQL es `LIMIT 10`).
+
+**Para qué sirve.** Nuevos frente a recurrentes mide la fidelidad: una tienda que solo vive de compradores nuevos tiene que captarlos sin parar. Las provincias dicen dónde concentrar el reparto y la publicidad, y los mejores clientes, a quién cuidar.
+
+#### 18.6.9 Del clic a la pantalla
+
+Esto es lo que ocurre cuando un administrador abre `/admin/reports/sales?from=2026-09-18&to=2026-10-17`:
+
+1. **La página** (`app/(admin)/admin/reports/[report]/page.tsx`) comprueba que el *slug* sea uno de los seis (`isReportSlug`); si no lo es, llama a `notFound()`. `generateMetadata` pone el título de la pestaña ("Reporte de ventas · Furnistore"). `/admin/reports` a secas redirige a `/admin/reports/sales`.
+2. **El contenedor** (`ReportScreenContainer`, de servidor) lee la URL con `loadReportSearchParams` y llama a `loadReport(slug, query)`.
+3. **La petición:** `getReport` hace `GET /api/admin/reports/sales?from=…&to=…` con el JWT del administrador (`authedApiFetch`) y un tiempo máximo de 15 segundos, más que en un listado porque un reporte agrega muchos datos.
+4. **La API:** `AdminReportsController` hereda de `AdminControllerBase`, que exige el rol `Admin`. Llama a `AdminReportService.SalesAsync`, que devuelve un `Result`: 200 con el JSON, o 400 con el error del período.
+5. **La pantalla:** pestañas (`ReportTabs`), barra de herramientas (`ReportToolbar`), título con el resumen y el período, y `ReportView`, que elige la vista del reporte (`SalesReportView`…). Las tarjetas y la tabla se pintan en el servidor. Los gráficos son componentes de cliente, porque Recharts necesita el navegador para medir el ancho disponible y mostrar el tooltip.
+6. **Al cambiar el período:** la barra de herramientas escribe las fechas en la URL con `nuqs` y `shallow: false`, así que Next.js vuelve a renderizar el contenedor en el servidor con los parámetros nuevos. Mientras llega la respuesta, la transición de `TableFrame` atenúa el contenido (`aria-busy`) en lugar de dejar la pantalla en blanco. Las pestañas conservan el período: cada enlace se construye con `serializeReportQuery` y la consulta actual, así que pasar de Ventas a Productos mantiene las fechas.
+
+**Los tipos atan los seis reportes.** `ReportData` asocia cada *slug* con su tipo de respuesta, que sale del contrato OpenAPI. `LoadedReport` es una unión discriminada:
+
+```ts
+export type LoadedReport = { [S in ReportSlug]: { slug: S; data: ReportData[S] } }[ReportSlug];
+```
+
+Equivale a `{ slug: "sales"; data: SalesReport } | { slug: "products"; data: ProductsReport } | …`. Dentro de un `switch (report.slug)`, TypeScript sabe en cada `case` qué forma tiene `report.data`. Hay tres de esos `switch`: `reportTable` (la tabla), `ReportView` (la pantalla) y `ReportContent` (el PDF). Si se añade un séptimo reporte y falta su `case`, la función deja de devolver algo en todos los caminos y TypeScript lo marca como error.
+
+#### 18.6.10 Una tabla, tres salidas
+
+Cada reporte define su tabla **una sola vez**, en `views/<reporte>/<reporte>-table.ts`:
+
+```ts
+export function salesTable(report: SalesReport) {
+  return defineTable({
+    id: "ventas",
+    title: "Ventas por período",
+    empty: "No hubo ventas en este período.",
+    rows: report.series,
+    columns: [
+      { header: "Período", kind: "text", value: (row) => formatBucket(row.start, row.end, report.meta.groupBy) },
+      { header: "Pedidos", kind: "count", value: (row) => row.orders },
+      { header: "Unidades", kind: "count", value: (row) => row.units },
+      { header: "Ingresos", kind: "money", value: (row) => row.revenue },
+    ],
+  });
+}
+```
+
+`defineTable` (en `tables/table-spec.ts`) convierte esa descripción tipada en datos neutros: los encabezados con su tipo de celda (`kind`) y cada fila como una lista de valores sin formatear, más un enlace opcional (`href`). Los tipos de celda son `text`, `count`, `money`, `percent`, `date` y `moment`. Esos datos tienen tres consumidores:
+
+| Salida | Componente | Qué hace con cada celda |
+|---|---|---|
+| Pantalla | `ReportTable` | La formatea según su tipo, alinea los números a la derecha con cifras de ancho fijo y convierte la primera celda en enlace |
+| PDF | `PdfTable` | Lo mismo, con componentes de react-pdf |
+| CSV | `toCsv` | Escribe el valor en bruto, para que una hoja de cálculo pueda operar con él |
+
+**Por qué así.** La lista de columnas existe en un solo sitio, así que la pantalla, el PDF y el CSV no pueden desincronizarse: añadir una columna la añade en las tres salidas. Y el formato depende del tipo de celda, no del reporte, de modo que todos los importes se ven igual en todas partes.
+
+#### 18.6.11 Exportar: el recorrido de un PDF
+
+1. **El menú** (`ExportMenu`, de cliente) arma la URL con el período **resuelto** que vino en `meta`, no con lo que dice la barra de direcciones. Si la URL no tenía fechas, la API usó los últimos 30 días, y el PDF usa exactamente esos días: lo descargado coincide con lo que se ve. `groupBy` solo se añade si el reporte agrupa.
+2. **La petición:** `fetch("/admin/reports/sales/pdf?from=…&to=…", { cache: "no-store" })`. Es del mismo origen, así que la cookie de sesión viaja sola. Mientras tanto, el botón muestra "Generando PDF…" y queda desactivado, para que un doble clic no genere dos archivos.
+3. **El Route Handler** (`app/(admin)/admin/reports/[report]/pdf/route.ts`, con `dynamic = "force-dynamic"` para que nunca se sirva de caché):
+   1. Si el *slug* no existe, responde 404.
+   2. `adminExportSession()` lee la sesión; si el usuario no es administrador, responde 403. Es la segunda de tres barreras: el middleware ya mandó al login a quien no tiene sesión, y la API vuelve a exigir el rol.
+   3. `loadReport(...)` es la **misma** función que usa la pantalla, así que los datos son idénticos.
+   4. `renderReportPdf(report, session.email)` genera el archivo en memoria, como un `Buffer`.
+   5. `exportFile(...)` registra la exportación y arma la respuesta.
+4. **La auditoría.** `exportFile` llama a `POST /api/admin/reports/exports` con el reporte, el formato y las fechas, y la API guarda una entrada `report.exported` con el resumen "Exportó «Ventas» en PDF (18/09/2026 – 17/10/2026)". Se ve en `/admin/audit` filtrando por "Reportes exportados". La registra la web porque la API nunca ve el PDF: sabe que alguien pidió datos, no que se los llevó en un archivo. Si el registro falla, el error se anota en la consola del servidor y el archivo se entrega igual: la exportación ya ocurrió, y bloquear la descarga no la desharía.
+5. **La respuesta** lleva tres cabeceras:
+   - `Content-Type: application/pdf`;
+   - `Content-Disposition: attachment; filename="furnistore-ventas-2026-09-18_2026-10-17.pdf"`, que pide al navegador guardar el archivo en lugar de mostrarlo, con un nombre que dice qué reporte es y de qué fechas;
+   - `Cache-Control: no-store`, porque son datos privados que cambian.
+6. **De vuelta en el navegador**, `ExportMenu`:
+   - si la respuesta es un error, lee el JSON `{ message }` y lo muestra bajo el botón;
+   - si es el archivo, lo convierte en `Blob`, crea una URL temporal con `URL.createObjectURL`, se la asigna a un `<a download>` invisible, lo pulsa, lo quita y libera la URL un segundo después. El nombre lo toma de `Content-Disposition`.
+
+**Por qué `fetch` y no un simple enlace.** Con `<a href="…/pdf" download>`, un fallo (API caída, falta de permisos) descargaría un JSON con extensión de PDF o abriría una página de error, y no habría forma de mostrar "Generando PDF…". Con `fetch` la página no se mueve, se ve el progreso y los errores salen en español junto al botón. Y es un Route Handler, no una Server Action, porque una Server Action no puede devolver un archivo (10.5).
+
+#### 18.6.12 Cómo se dibuja un PDF con React
+
+**Concepto.** React no está atado a HTML: describe un árbol de componentes, y otra pieza decide qué hacer con él. `react-dom` lo convierte en HTML; **`@react-pdf/renderer`** lo convierte en páginas de PDF. Tiene sus propios componentes (`Document`, `Page`, `View`, que hace de `div`, `Text`, `Svg`…), estilos parecidos a CSS con un subconjunto de flexbox, y un motor que reparte el contenido en páginas y escribe el archivo. Todo ocurre en Node: `renderToBuffer(<Document>…)` devuelve los bytes del PDF sin abrir un navegador ni llamar a ningún programa externo.
+
+**En Furnistore.** `pdf/render-report-pdf.tsx` monta el documento:
+
+```tsx
+export function renderReportPdf(report: LoadedReport, generatedBy: string): Promise<Buffer> {
+  const definition = REPORTS[report.slug];
+
+  return renderToBuffer(
+    <PdfReport
+      title={definition.title}
+      meta={report.data.meta}
+      generatedBy={generatedBy}
+      usesPeriod={definition.usesPeriod}
+    >
+      <ReportContent report={report} />
+    </PdfReport>,
+  );
+}
+```
+
+`PdfReport` (`pdf/pdf-layout.tsx`) es el marco común. `ReportContent` elige el contenido del reporte (`SalesPdf`, `ProductsPdf`…), que repite la forma de la pantalla con piezas de PDF: `PdfStats` (las tarjetas), `PdfChartBox` (el gráfico) y `PdfTable` (la tabla).
+
+- **La página:** A4, con márgenes de 36 puntos (media pulgada; en PDF todo se mide en puntos, y un punto es 1/72 de pulgada). `<Document title author language="es">` rellena las propiedades del archivo que muestra el visor.
+- **La cabecera:** "Furnistore", "Reporte de ventas" y una línea con el período, cuándo y quién lo generó y la moneda: "Período: 18 sept 2026 – 17 oct 2026 · Generado el … por admin@… · Importes en USD". Un PDF circula fuera de la aplicación, y sin esa línea nadie sabría de qué fechas es ni de dónde salió.
+- **El pie** se repite en cada página gracias a `fixed`, y numera las páginas con una función que react-pdf llama cuando ya sabe cuántas hay:
+
+```tsx
+<Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+```
+
+- **Los saltos de página.** Una tabla larga ocupa varias páginas, y tres propiedades evitan que quede mal cortada:
+  - `fixed` en la fila de encabezados: se repite arriba en cada página;
+  - `wrap={false}` en cada fila y en la caja del gráfico: nunca se parten por la mitad;
+  - `minPresenceAhead={40}` en el título de la tabla: si después de él no caben 40 puntos de tabla, pasa a la página siguiente junto con ella, en lugar de quedarse solo al pie.
+- **Los estilos** se escriben con `StyleSheet.create`, en puntos. Los colores están en hexadecimal en `pdf/theme.ts`: las variables CSS del sitio (`var(--chart-1)`) no existen dentro de un PDF, y el papel siempre es blanco, así que no hay modo oscuro.
+- **Las fuentes** son Helvetica y Helvetica-Bold, dos de las 14 fuentes estándar que cualquier lector de PDF trae de serie. No hay que descargar ni incrustar ningún archivo de fuente, el PDF pesa menos y se genera sin conexión. Cubren el español (á, ñ, ¿). `Font.registerHyphenationCallback((word) => [word])` desactiva el guionado automático, que por defecto parte las palabras con reglas del inglés.
+- **Los textos y los números** usan las mismas funciones que la pantalla (`formatValue`, `formatRange`, `formatMoment`): un importe es "$1234,50" en los dos sitios, y las fechas se cuentan en la hora de La Habana.
+
+**Por qué un `*-pdf.tsx` por reporte, y no reutilizar la pantalla.** El componente de pantalla es HTML con clases de Tailwind y gráficos de Recharts, y nada de eso existe en react-pdf: no hay DOM, ni clases CSS, ni navegador que mida. Lo que sí se comparte es todo lo que importa: los datos, la tabla y el formato. Lo único duplicado es la maquetación, en archivos de 25 a 40 líneas.
+
+#### 18.6.13 Los gráficos del PDF, dibujados a mano
+
+Recharts necesita un navegador: mide el contenedor y dibuja SVG en el DOM. Dentro de un PDF no hay ninguno, así que `pdf/pdf-charts.tsx` dibuja los tres tipos de gráfico con las primitivas SVG de react-pdf (`Svg`, `Path`, `Rect`, `Line`, `Circle`) y algo de aritmética.
+
+- **La escala.** `niceMax` redondea el máximo hacia arriba a 1, 2, 2,5, 5 o 10 multiplicado por una potencia de 10: 3840 pasa a 5000; 730, a 1000; 12, a 20. Un eje que termina en 5000 se lee mejor que uno que termina en 3840. Las líneas guía van en 0, en la mitad y en el máximo, con etiquetas en formato compacto (`formatAxisValue` escribe "$5 mil").
+
+```ts
+function niceMax(value: number): number {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const step = [1, 2, 2.5, 5, 10].find((candidate) => value / magnitude <= candidate) ?? 10;
+  return step * magnitude;
+}
+```
+
+- **Las coordenadas.** `x(index)` reparte los puntos a lo ancho, a la derecha del eje. `y(value)` es `top + plot × (1 − value / max)`: en SVG la *y* crece hacia abajo, así que el 0 queda abajo y el máximo arriba.
+- **Área (Ventas).** Un `Path` recorre los puntos (`M x0,y0 L x1,y1 L …`). El relleno es el mismo trazo, que baja hasta el eje y vuelve al inicio (`… L xn,y(0) L x0,y(0) Z`), pintado con un 20 % de opacidad. Para que las fechas del eje no se pisen, se escribe una de cada `Math.ceil(n / 8)`: unas ocho etiquetas, haya los puntos que haya.
+- **Barras (Operación e Inventario; horizontales en Productos y Clientes).** Un `Rect` por elemento, de longitud proporcional a `valor / máximo`, con su cifra encima o al lado. En las horizontales, los nombres de más de 36 caracteres se recortan con "…".
+- **Dona (Cancelaciones).** Cada porción es un `Path` con dos arcos (`A`): el exterior va de un ángulo a otro, una línea entra hacia el centro y el interior vuelve. El ángulo de cada porción es su parte de una vuelta completa (2π). La bandera *large-arc* vale 1 cuando la porción pasa de media vuelta. Si hay una sola porción (100 %), el arco empezaría y terminaría en el mismo punto y SVG no dibujaría nada; para ese caso se pinta un `Circle` de trazo grueso.
+- **Los textos** no se dibujan dentro del `Svg`: van en `Text` con posición absoluta, encima (un `View` con `position: relative` envuelve las dos capas). Así usan la misma fuente y el mismo formato que el resto del PDF.
+
+Son unas 250 líneas de código previsible y sin dependencias. La alternativa, ejecutar Recharts en el servidor y convertir el resultado en imagen, exigiría simular un navegador.
+
+#### 18.6.14 El CSV
+
+`csv/route.ts` sigue el mismo recorrido que el PDF (comprueba el *slug* y el rol, carga el reporte y registra la exportación), pero entrega solo **la tabla** del reporte: el CSV es para trabajar los datos en una hoja de cálculo, y ahí las tarjetas y el gráfico sobran. `toCsv` (`export/csv.ts`) cuida cuatro cosas:
+
+- **Valores en bruto.** Un importe sale como `1234.5`, no como "$1234,50"; un porcentaje, como `12.5`. La unidad va en el encabezado: "Ingresos (USD)", "% del total". Así la hoja de cálculo puede sumarlos y ordenarlos. Las fechas con hora salen como `2026-10-17 14:05`, en hora de La Habana.
+- **Comillas.** Un campo que contiene comillas, comas, punto y coma o saltos de línea va entre comillas, y sus comillas internas se duplican (`"Mesa ""Nórdica"""`). Es la convención del formato, recogida en la RFC 4180, y la necesitan sobre todo los motivos de cancelación, que escriben personas.
+- **Saltos de línea `\r\n`**, los que pide ese mismo estándar y espera Excel.
+- **La marca BOM** (`﻿`) al principio: un carácter invisible que avisa a Excel de que el archivo está en UTF-8. Sin ella, Excel abre "Lámpara" como "LÃ¡mpara".
+
+Un aviso práctico: según la configuración regional, Excel en español espera `;` como separador y puede meter todo en una sola columna al abrir el archivo con doble clic. En ese caso hay que importarlo desde *Datos → Desde texto/CSV*. LibreOffice y Google Sheets preguntan el separador al abrirlo.
+
+#### 18.6.15 Por qué así
+
+**Calcular en la API y presentar en la web.** La API conoce los datos y las reglas (qué es una venta, a qué día pertenece un pedido); la web sabe cómo mostrarlos. El mismo JSON alimenta la pantalla, el PDF y el CSV, así que las tres salidas no pueden dar cifras distintas.
+
+**Sin tablas de reportes ni cálculos nocturnos.** Cada reporte se calcula al pedirlo, sobre datos vivos. Con el volumen de esta tienda cada consulta tarda milisegundos, y los índices `(Status, PlacedAt)` y `(ClientId, PlacedAt)` de `Orders` ayudan a filtrar por fecha. Precalcular (vistas materializadas, procesos nocturnos) añadiría piezas y datos atrasados. Valdría la pena si los pedidos se contaran por cientos de miles y los reportes empezaran a tardar.
+
+**El PDF, en el servidor de Next.js y con react-pdf.** Estas eran las alternativas, y por esto se descartaron:
+
+| Alternativa | Por qué no |
+|---|---|
+| `window.print()` con una hoja de estilos de impresión | Cada navegador imprime distinto, no hay control de los saltos de página y no se puede registrar la exportación |
+| jsPDF y html2canvas en el navegador | Es una captura de la página: texto borroso que no se puede seleccionar, y archivos pesados |
+| Puppeteer (Chrome sin ventana) en el servidor | Fidelidad perfecta, pero obliga a descargar y ejecutar un navegador completo en el servidor; el proyecto funciona solo con sus paquetes |
+| Generarlo en la API, en C# | Habría que reescribir en C# el formato de importes y fechas que ya vive en la web |
+
+react-pdf es JavaScript puro, corre en Node, se escribe con componentes como el resto de la web y produce un PDF con texto real, que se puede seleccionar, buscar y copiar.
+
+**El precio de esta decisión.** Cada reporte tiene dos maquetaciones (`*-report.tsx` y `*-pdf.tsx`) y cada gráfico existe dos veces (Recharts en pantalla, SVG a mano en el PDF). Es lo que se paga por no depender de un navegador en el servidor, y se reduce compartiendo los datos, la tabla y el formato.
 
 ### 18.7 Auditoría — `/admin/audit`
 
@@ -1585,8 +2106,16 @@ Como la mayoría de los componentes son de servidor, su código no se descarga. 
 
 ### 22.5 Añadir un reporte
 
-1. Añadir el *slug* a `REPORT_SLUGS` y su definición a `REPORTS` en `definitions.ts`.
-2. Crear `views/<nombre>/` con la vista de pantalla, la tabla y el PDF.
+En la API (`API.Furnistore.Application/Admin/Reports/`):
+
+1. Añadir el valor a `ReportKind` y el tipo de la respuesta a `ReportContracts.cs`, con un `ReportMeta` como primer campo.
+2. Escribir el método en `AdminReportService`: empieza con `Resolve(query)` y filtra con `period.StartUtc` y `period.EndUtc` (18.6.2). Añadir su título a `Title`.
+3. Exponerlo en `AdminReportsController` y regenerar el contrato: `npm run openapi` en `apps/api` y `npm run gen:api` en `apps/web`.
+
+En la web (`modules/admin/reports/`):
+
+1. Añadir el *slug* a `REPORT_SLUGS` y su definición a `REPORTS` en `definitions.ts`, y su tipo a `ReportData` en `api.ts`.
+2. Crear `views/<nombre>/` con la vista de pantalla, la tabla (`defineTable`) y el PDF.
 3. Añadir un `case` en `registry.ts`, `render-report-pdf.tsx` y `report-view.tsx`. TypeScript señala los `switch` que no lo cubren.
 
 ---
@@ -1602,6 +2131,8 @@ Detalles encontrados al escribir esta guía. Ninguno rompe nada; son mejoras pen
 - **Validación de ids repetida:** `app/(shop)/orders/[orderId]/page.tsx` tiene su propia expresión regular en lugar de usar `parseRouteId` de `modules/admin/route-id.ts`.
 - **Construcción de *query strings* repetida:** `modules/products/api.ts` monta la URL a mano en lugar de usar `toQueryString` de `lib/api/query.ts`, como hace el resto.
 - **404 con código 200** en rutas de la tienda con streaming (capítulo 5.6).
+- **Exportar con la sesión caducada del todo:** si el *refresh token* ya no vale, el middleware redirige la petición de exportación al login, `fetch` sigue la redirección y `ExportMenu` guarda la página de login con nombre de PDF. Bastaría con comprobar `response.redirected` o el `Content-Type` antes de guardar. Es raro, porque el middleware renueva la sesión mientras el *refresh token* siga vigente.
+- **Parámetro `table` sin uso:** `ExportMenu` añade `table` a la URL del CSV, pero `csv/route.ts` no lo lee; la tabla sale siempre de `reportTable`. Sobra en la URL o falta en el Route Handler.
 - **Idioma y formato fijos en español:** fechas, precios y textos están escritos directamente en los componentes; añadir otro idioma exigiría extraerlos (ver la conversación sobre internacionalización).
 - **`SUPABASE_URL` obligatoria:** `next.config.ts` no deja arrancar la web sin ella, aunque solo se usa para las imágenes. Si las imágenes dejan de estar en Supabase, habrá que cambiar `remotePatterns` y esa comprobación.
 

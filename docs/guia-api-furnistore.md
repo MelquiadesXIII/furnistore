@@ -37,21 +37,21 @@ Las rutas de archivo son relativas a `apps/api/`. Los fragmentos de código se c
 13. Migraciones
 14. Transacciones y concurrencia
 
-**Parte IV. Seguridad** *(próxima entrega)*
+**Parte IV. Seguridad**
 
 15. ASP.NET Core Identity
 16. JWT y refresh tokens
-17. Autorización, rate limiting y CORS
+17. Autorización, límites de peticiones y CORS
 18. Verificación de correo
 
-**Parte V. Referencia del dominio** *(próxima entrega)*
+**Parte V. Referencia del dominio**
 
 19. Controladores y endpoints
 20. Servicios de aplicación
 21. Catálogo de errores
 22. Integraciones externas
 
-**Parte VI. Calidad y operación** *(próxima entrega)*
+**Parte VI. Calidad y operación**
 
 23. Pruebas
 24. Contrato OpenAPI
@@ -327,7 +327,7 @@ var app = builder.Build();
 
 Después del `Build`, y antes de atender peticiones, `Program.cs` hace cuatro cosas:
 
-1. **Avisos de configuración incompleta.** Si faltan las credenciales SMTP o las de Supabase Storage, escribe un *warning* en el log. La API arranca igualmente; solo fallarán el envío de correos o la subida de imágenes.
+1. **Avisos de configuración incompleta.** Si faltan las credenciales SMTP o las de Supabase Storage, escribe un *warning* en el log. La API arranca igualmente; solo fallaría el envío de correos. El aviso de Supabase quedó de cuando las imágenes se subían allí: hoy se guardan en `assets/` (6.4) y ese aviso se puede ignorar.
 2. **Crear los roles.** Si no existen los roles `Admin` y `User`, los crea:
 
    ```csharp
@@ -426,7 +426,7 @@ Ventajas:
 |---|---|---|
 | **Singleton** | Una vez para toda la aplicación. | `SmtpEmailSender`, `TimeProvider.System`, `JwtOptions`, `TokenValidationParameters`. |
 | **Scoped** | Una vez por petición HTTP. Todos los que lo pidan en la misma petición reciben el mismo. | `APIFurnistoreContext` y todos los servicios de negocio. |
-| **Transient** | Cada vez que alguien lo pide. | Los clientes HTTP tipados (`SupabaseImageStorage`). |
+| **Transient** | Cada vez que alguien lo pide. | Ningún servicio propio hoy. Los clientes HTTP tipados, como el antiguo `SupabaseImageStorage`, lo son. |
 
 La regla que no se puede romper: **un servicio no puede depender de otro que vive menos que él.** Si un Singleton guardara un `DbContext` (Scoped), ese `DbContext` quedaría vivo para siempre, compartido entre peticiones simultáneas, y EF Core no es seguro para eso. Esto se llama **dependencia cautiva**, y en Development ASP.NET Core lanza un error al detectarla.
 
@@ -442,7 +442,7 @@ services.AddScoped<AuditLog>();
 … (14 servicios Scoped en total)
 
 services.AddSingleton<IVerificationEmailSender, SmtpEmailSender>();
-services.AddHttpClient<IProductImageStorage, SupabaseImageStorage>();
+services.AddSingleton<IProductImageStorage, LocalImageStorage>();
 services.AddSingleton(TimeProvider.System);
 ```
 
@@ -452,10 +452,10 @@ services.AddSingleton(TimeProvider.System);
 
 **Por qué dos servicios sí tienen interfaz.** `IVerificationEmailSender` (enviar correo) e `IProductImageStorage` (guardar imágenes) hablan con **sistemas externos**. Tener la interfaz permite dos cosas:
 
-- La interfaz se declara en `Application`, pero la implementación (`SmtpEmailSender`, `SupabaseImageStorage`) vive en `API`. Así la lógica de negocio no depende de MailKit ni de Supabase (ver 6.4).
-- En las pruebas se registra `FakeImageStorage` en lugar de Supabase.
+- La interfaz se declara en `Application`, pero la implementación (`SmtpEmailSender`, `LocalImageStorage`) vive en `API`. Así la lógica de negocio no depende de MailKit ni de dónde se guarden los archivos (ver 6.4).
+- En las pruebas se registra `FakeImageStorage` en lugar del disco.
 
-**`AddHttpClient<IProductImageStorage, SupabaseImageStorage>()`** registra un **cliente HTTP tipado**: el contenedor le inyecta a `SupabaseImageStorage` un `HttpClient` gestionado por una fábrica que reutiliza las conexiones. Crear `new HttpClient()` en cada llamada es un error clásico que agota los *sockets*.
+**`LocalImageStorage` es Singleton** porque no guarda estado propio: escribe el archivo en la carpeta `assets/` del repositorio y arma la URL con el `IHttpContextAccessor`, que siempre devuelve la petición en curso. Hasta el 16 de octubre la implementación era `SupabaseImageStorage`, registrada con `AddHttpClient<IProductImageStorage, SupabaseImageStorage>()`: un **cliente HTTP tipado**, al que el contenedor inyecta un `HttpClient` gestionado por una fábrica que reutiliza las conexiones. Esa clase sigue en el código, sin uso. Crear `new HttpClient()` en cada llamada es un error clásico que agota los *sockets*, y por eso existe esa fábrica.
 
 **`TimeProvider.System`** es el reloj de .NET registrado como servicio. Los servicios que necesitan la hora la piden por inyección (`TimeProvider clock`) en lugar de llamar a `DateTime.UtcNow`, y así una prueba puede inyectar un reloj falso para simular, por ejemplo, que un código ya caducó. *Nota:* `OrderService.CheckoutAsync` todavía usa `DateTime.UtcNow` directamente; es una inconsistencia menor.
 
@@ -520,7 +520,7 @@ En producción no se carga ningún `.env`: las variables las pone el entorno de 
 | `DATABASE_URL` | Cadena de conexión a PostgreSQL. |
 | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE` | Firmar y validar los tokens. |
 | `SmtpSettings__UserName`, `SmtpSettings__Password`, `SmtpSettings__SenderEmail` | Credenciales del correo. |
-| `SupabaseStorage__Url`, `SupabaseStorage__ServiceKey` | Subida de imágenes. |
+| `SupabaseStorage__Url`, `SupabaseStorage__ServiceKey` | Subida de imágenes a Supabase. Sin uso desde que las imágenes se guardan en `assets/`. |
 | `ForwardedHeaders__KnownProxies` | IPs de proxies de confianza. |
 | `CORS_ORIGINS` | Orígenes permitidos, separados por comas. |
 | `ASPNETCORE_ENVIRONMENT`, `ASPNETCORE_URLS` | Entorno y dirección en la que escucha el servidor. Las lee ASP.NET Core directamente. |
@@ -680,7 +680,8 @@ API/
 ├── Middleware/           RequestLoggingMiddleware, GlobalExceptionHandler
 ├── Extensions/           registro de servicios y utilidades HTTP
 ├── Configuration/        clases de Options (SmtpSettings, SupabaseStorageSettings)
-├── Services/             SmtpEmailSender, SupabaseImageStorage, DatabaseWarmupService
+├── Services/             SmtpEmailSender, LogVerificationEmailSender, LocalImageStorage,
+│                         SupabaseImageStorage (sin uso), DatabaseWarmupService
 ├── Commands/             AdminCommand (comando de consola)
 ├── SwaggerHostFactory.cs host mínimo para generar openapi.json (capítulo 24)
 ├── appsettings*.json
@@ -701,7 +702,7 @@ Solo `API.Furnistore.API` es ejecutable. `Application`, `Data` y `Shared` son bi
 
 ### 6.4 Inversión de dependencias en un caso concreto
 
-`AdminProductService` (en `Application`) necesita guardar imágenes, pero `Application` no puede conocer Supabase. La solución:
+`AdminProductService` (en `Application`) necesita guardar imágenes, pero `Application` no puede saber si van a un disco, a Supabase o a otro servicio. La solución:
 
 1. `Application` declara **qué necesita**, como una interfaz:
 
@@ -710,11 +711,11 @@ Solo `API.Furnistore.API` es ejecutable. `Application`, `Data` y `Shared` son bi
    public interface IProductImageStorage { … }
    ```
 
-2. `API` aporta **cómo se hace**: `Services/SupabaseImageStorage.cs` implementa esa interfaz con HTTP.
-3. `Program.cs` los une: `AddHttpClient<IProductImageStorage, SupabaseImageStorage>()`.
+2. `API` aporta **cómo se hace**: `Services/LocalImageStorage.cs` implementa esa interfaz guardando el archivo en `assets/`, y la API sirve esa carpeta en `/assets`.
+3. El registro los une: `AddSingleton<IProductImageStorage, LocalImageStorage>()`.
 4. Las pruebas registran `FakeImageStorage` en su lugar.
 
-La dependencia "natural" sería servicio → Supabase; con la interfaz se **invierte**: la implementación de Supabase depende de una interfaz definida por el negocio. Si mañana las imágenes se guardan en disco o en S3, se escribe otra clase y se cambia una línea en el registro; `AdminProductService` no se toca. Lo mismo ocurre con `IVerificationEmailSender` y `SmtpEmailSender`.
+La dependencia "natural" sería servicio → almacenamiento; con la interfaz se **invierte**: el almacenamiento depende de una interfaz definida por el negocio. Y esto no es teoría: hasta el 16 de octubre las imágenes se subían a Supabase Storage con `SupabaseImageStorage`. Para que la aplicación funcionara sin conexión se escribió `LocalImageStorage` y se cambió **una línea** del registro; `AdminProductService` y sus pruebas no se tocaron. Lo mismo ocurre con `IVerificationEmailSender`: en desarrollo se puede cambiar `SmtpEmailSender` por `LogVerificationEmailSender`, que escribe el código en la consola (18.6).
 
 ### 6.5 Por qué esta arquitectura y no otra
 
@@ -2055,4 +2056,1218 @@ catch (DbUpdateException exception) when (AdminErrors.IsUniqueViolation(exceptio
 
 ---
 
-*Fin de la segunda entrega (Partes I a III). Las Partes IV a VI se añadirán en las siguientes entregas.*
+# Parte IV. Seguridad
+
+La seguridad de la API responde a tres preguntas, en este orden:
+
+1. **¿Quién eres?** Autenticación: Identity guarda las cuentas y comprueba la contraseña, y el JWT demuestra en cada petición quién la hace (capítulos 15 y 16).
+2. **¿Qué puedes hacer?** Autorización: roles, datos propios y reglas como "no puedes quitarte el rol a ti mismo" (capítulo 17).
+3. **¿Cuántas veces puedes intentarlo?** Límites de peticiones, bloqueo de cuentas y verificación de correo, para que nadie pruebe contraseñas o códigos por fuerza bruta (capítulos 17 y 18).
+
+## 15. ASP.NET Core Identity
+
+### 15.1 Concepto
+
+Guardar usuarios parece fácil, pero hacerlo bien no lo es: las contraseñas no se pueden guardar tal cual, hay que bloquear cuentas tras varios fallos, normalizar correos para compararlos, gestionar roles… **ASP.NET Core Identity** es la biblioteca oficial que resuelve todo eso. Aporta:
+
+- **Las tablas:** `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles` y algunas más (capítulo 10).
+- **Los gestores:** `UserManager<IdentityUser>` (crear usuarios, comprobar contraseñas, bloquear) y `RoleManager<IdentityRole>` (crear roles).
+- **Las reglas de contraseña y de bloqueo**, configurables.
+- **El hash de contraseñas**, hecho correctamente.
+
+### 15.2 En Furnistore
+
+En `Program.cs`:
+
+```csharp
+builder
+    .Services.AddDefaultIdentity<IdentityUser>(options =>
+    {
+        options.SignIn.RequireConfirmedAccount = false;
+        options.Password.RequireDigit = true;
+        options.Password.RequiredLength = 8;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<APIFurnistoreContext>();
+```
+
+| Línea | Qué hace |
+|---|---|
+| `AddDefaultIdentity<IdentityUser>` | Registra Identity con el usuario estándar (`IdentityUser`: correo, hash, bloqueo…). Furnistore no lo amplía: los datos de la tienda van en `Clients` (10.3). |
+| `RequireConfirmedAccount = false` | Identity no exige la confirmación por su cuenta. La exige `AuthService.LoginAsync`, con el código de 6 dígitos propio (capítulo 18). |
+| `Password.*` | Mínimo 8 caracteres y al menos un dígito (RN1). Se relajan mayúsculas y símbolos: la longitud protege más que la variedad, y las reglas demasiado estrictas llevan a contraseñas apuntadas en un papel. |
+| `Lockout.*` | Tras 5 contraseñas incorrectas, la cuenta se bloquea 5 minutos (RN3), también para las cuentas nuevas. |
+| `AddRoles<IdentityRole>()` | Activa los roles (`Admin` y `User`). |
+| `AddEntityFrameworkStores<APIFurnistoreContext>()` | Identity guarda sus datos con EF Core, en la misma base y con el mismo `DbContext` que la tienda. Por eso `APIFurnistoreContext` hereda de `IdentityDbContext` (11.2). |
+
+`AddDefaultIdentity` también registra un esquema de autenticación por *cookies*, pero no se usa: el esquema por defecto es el JWT (16.2). La API solo usa de Identity `UserManager` y `RoleManager`, nunca `SignInManager`, que está pensado para sitios con *cookies* de sesión.
+
+### 15.3 Las contraseñas: un hash, nunca el texto
+
+La columna `AspNetUsers.PasswordHash` no contiene la contraseña, sino un **hash**: el resultado de una función que es fácil de calcular en un sentido e imposible de invertir. Identity usa **PBKDF2** con HMAC-SHA512, una **sal** aleatoria distinta por usuario y decenas de miles de iteraciones:
+
+- La **sal** hace que dos personas con la misma contraseña tengan hashes distintos, y que no sirvan las tablas precalculadas de contraseñas comunes.
+- Las **iteraciones** hacen que calcular un hash cueste milisegundos. Para un usuario que inicia sesión no se nota, pero quien robara la base y quisiera probar millones de contraseñas tardaría años.
+
+Al iniciar sesión, `UserManager.CheckPasswordAsync(user, password)` calcula el hash de lo que se escribió, con la misma sal, y lo compara con el guardado. En ningún momento la API puede leer la contraseña original, ni siquiera un administrador.
+
+### 15.4 El bloqueo de cuentas, y cómo se reutiliza para desactivarlas
+
+`AuthService.LoginAsync` gestiona el bloqueo a mano con `UserManager`:
+
+```csharp
+if (!disabled && await userManager.IsLockedOutAsync(user))
+    return LockedOut(user);
+
+if (!await userManager.CheckPasswordAsync(user, request.Password))
+{
+    if (disabled)
+        return LoginFailure(email, "bad_password");
+
+    await userManager.AccessFailedAsync(user);
+
+    return await userManager.IsLockedOutAsync(user)
+        ? LockedOut(user)
+        : LoginFailure(email, "bad_password");
+}
+```
+
+- `AccessFailedAsync` suma un fallo (`AccessFailedCount`) y, al llegar a 5, rellena `LockoutEnd` con la hora actual más 5 minutos.
+- Un inicio de sesión correcto llama a `ResetAccessFailedCountAsync` y pone el contador a cero.
+- Mientras `LockoutEnd` esté en el futuro, `IsLockedOutAsync` devuelve `true` y la API responde 429 `auth.locked_out`, **aunque la contraseña sea correcta**. Si no fuera así, quien prueba contraseñas sabría cuándo acierta.
+
+**Desactivar una cuenta reutiliza el mismo mecanismo.** No hace falta una columna nueva: desactivar es bloquear hasta el año 9999 (`Auth/AccountLock.cs`):
+
+```csharp
+public static readonly DateTimeOffset DisabledUntil = new(9999, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+public static bool IsDisabled(IdentityUser user) => user.LockoutEnd >= DisabledUntil;
+```
+
+Para el código, "bloqueada" (por fallos, durante minutos) y "desactivada" (por un administrador, hasta que la reactive) se distinguen solo por la fecha. Una cuenta desactivada responde 403 `auth.account_disabled`, y sus fallos de contraseña no cuentan, para que no se desbloquee sola cuando caduque el bloqueo.
+
+### 15.5 Roles
+
+Hay dos roles, `User` y `Admin`, que `Program.cs` crea al arrancar si no existen (3.3):
+
+- **`User`:** se asigna a toda cuenta al registrarse.
+- **`Admin`:** lo da un administrador desde el panel (`AdminCustomerService.GrantAdminAsync`) o, para el primero, la consola:
+
+```bash
+dotnet run --project API.Furnistore.API -- admin promote ana@example.com
+```
+
+`Commands/AdminCommand.cs` intercepta esos argumentos antes de que el servidor empiece a escuchar, llama al mismo `GrantAdminAsync` que usa el panel (con el autor `console`, que queda en la auditoría) y termina. Usar el mismo servicio garantiza que la consola respete las mismas reglas: por ejemplo, que la cuenta tenga el correo confirmado.
+
+### 15.6 Por qué Identity
+
+- **No reinventar la criptografía.** Un hash de contraseñas casero es el error de seguridad más común en proyectos de estudiantes. Identity lo resuelve con algoritmos revisados por expertos.
+- **Viene integrado con EF Core y ASP.NET Core:** sus tablas son migraciones más, y sus roles los entiende `[Authorize(Roles = "Admin")]` sin configuración extra.
+- **Se usa solo lo necesario.** Identity incluye páginas de login, autenticación con Google, doble factor… Furnistore usa los gestores y las tablas, y hace el resto (JWT, códigos por correo) a su manera, porque su cliente es una aplicación Next.js y no páginas generadas por el servidor.
+
+---
+
+## 16. JWT y refresh tokens
+
+### 16.1 Concepto
+
+Después de iniciar sesión, cada petición tiene que demostrar quién la hace. Hay dos grandes formas:
+
+- **Sesión en el servidor:** el servidor guarda "la sesión 8f3a… es de Ana" y el cliente envía ese identificador. Cada petición obliga a buscar la sesión.
+- **Token firmado (JWT):** el servidor entrega un texto que **contiene** los datos ("soy el usuario 42, con rol Admin, válido hasta las 15:00") y una **firma**. El servidor no guarda nada: le basta con comprobar la firma.
+
+Un **JWT** (*JSON Web Token*) son tres partes en Base64 separadas por puntos: cabecera, contenido (*claims*) y firma. La firma es un HMAC-SHA256 del resto, calculado con una clave secreta que solo conoce la API (`JWT_SECRET`). Quien cambie una sola letra del contenido, por ejemplo para ponerse el rol `Admin`, invalida la firma. El contenido **no está cifrado**: cualquiera puede leerlo, y por eso un JWT nunca lleva datos sensibles.
+
+El problema de un JWT es que **no se puede revocar**: si es válido hasta las 15:00, lo es hasta las 15:00, aunque la persona cierre sesión. La solución estándar es combinar dos tokens:
+
+| Token | Duración | Dónde se valida | Para qué |
+|---|---|---|---|
+| **JWT** (*access token*) | 1 hora | En memoria, comprobando la firma | Cada petición |
+| **Refresh token** | 30 días | En la base de datos | Pedir un JWT nuevo cuando el anterior vence |
+
+El JWT dura poco, así que si se filtra sirve poco tiempo. El refresh token dura mucho, pero solo sirve para una cosa, se consulta en la base en cada uso y se puede revocar.
+
+### 16.2 La configuración
+
+En `Program.cs`, primero se leen los tres valores de las variables de entorno (5.2), y luego se define cómo validar un token:
+
+```csharp
+var tokenValidationParameters = new TokenValidationParameters()
+{
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = new SymmetricSecurityKey(key),
+    ValidateIssuer = true,
+    ValidIssuer = jwtIssuer,
+    ValidateAudience = true,
+    ValidAudience = jwtAudience,
+    RequireExpirationTime = true,
+    ValidateLifetime = true,
+    ClockSkew = TimeSpan.Zero,
+};
+```
+
+| Parámetro | Comprueba |
+|---|---|
+| `IssuerSigningKey` | Que la firma se hizo con nuestra clave. |
+| `ValidIssuer` | Que el token lo emitió esta API (`JWT_ISSUER`). |
+| `ValidAudience` | Que el token es para esta API (`JWT_AUDIENCE`), y no para otra que compartiera la clave. |
+| `ValidateLifetime` + `RequireExpirationTime` | Que tiene fecha de caducidad y no ha pasado. |
+| `ClockSkew = TimeSpan.Zero` | Sin margen. Por defecto .NET tolera 5 minutos de diferencia entre relojes, así que un token de 1 hora duraría en la práctica 65 minutos. |
+
+Esos parámetros se registran como Singleton y se usan en dos sitios: en `AddJwtBearer`, que valida cada petición, y en `AuthService.RefreshAsync`, que valida el JWT vencido al renovar (16.4).
+
+```csharp
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(jwt =>
+{
+    jwt.SaveToken = true;
+    jwt.TokenValidationParameters = tokenValidationParameters;
+});
+```
+
+Con esto, el middleware `UseAuthentication()` lee la cabecera `Authorization: Bearer <jwt>` de cada petición, valida el token y, si es correcto, rellena `HttpContext.User` con sus *claims*. Si no hay token o no es válido, la petición sigue como anónima; será la autorización (capítulo 17) la que decida si eso basta.
+
+### 16.3 Emitir los tokens
+
+`AuthService.IssueTokensAsync` se llama al iniciar sesión y al renovar. Primero, el JWT:
+
+```csharp
+var claims = new List<Claim>
+{
+    new Claim("Id", user.Id),
+    new Claim(JwtRegisteredClaimNames.Sub, user.Email!),
+    new Claim(JwtRegisteredClaimNames.Email, user.Email!),
+    new Claim(JwtRegisteredClaimNames.Jti, jti),
+};
+
+foreach (var role in roles)
+{
+    claims.Add(new Claim(ClaimTypes.Role, role));
+}
+```
+
+| *Claim* | Para qué |
+|---|---|
+| `Id` | El id del usuario en `AspNetUsers`. Los controladores lo leen con `User.UserId()` (17.3). |
+| `sub` y `email` | El correo. La web lo muestra en el menú de la cuenta. |
+| `jti` | Un identificador único de este JWT, que se guarda junto al refresh token para emparejarlos. |
+| `role` (uno por rol) | Lo que lee `[Authorize(Roles = "Admin")]`. |
+
+Después, el refresh token: 48 caracteres aleatorios de un alfabeto de 64 (`RandomGenerator`, que usa `RandomNumberGenerator`, el generador criptográfico de .NET, y no `Random`, que es predecible). En la base se guarda **su hash SHA-256**, no el token:
+
+```csharp
+var rawRefreshToken = RandomGenerator.GenerateRandomString(48);
+var refreshToken = new RefreshToken
+{
+    JwtId = jti,
+    TokenHash = RefreshTokenHasher.Hash(rawRefreshToken),
+    AddedDate = now,
+    ExpiryDate = now.Add(jwt.RefreshTokenLifetime),
+    IsRevoked = false,
+    IsUsed = false,
+    UserId = user.Id,
+};
+```
+
+Por la misma razón que las contraseñas: quien robara una copia de la base no podría usar ninguna sesión. Aquí basta con SHA-256, sin sal ni iteraciones, porque el token es aleatorio y largo: no hay "tokens comunes" que probar.
+
+### 16.4 Renovar: `RefreshAsync` paso a paso
+
+Cuando el JWT vence, la web envía el JWT vencido y el refresh token a `POST /api/authentication/refresh-token`. La API comprueba, en este orden:
+
+1. **La firma del JWT, pero no su caducidad.** Por definición está vencido; lo que importa es que lo emitió esta API.
+
+   ```csharp
+   var parameters = tokenValidationParameters.Clone();
+   parameters.ValidateLifetime = false;
+   ```
+
+2. **El algoritmo es HS256.** Evita trucos con tokens que declaran otro algoritmo, por ejemplo `none`.
+3. **El refresh token existe**, buscándolo por su hash.
+4. **No está revocado** (por un *logout*).
+5. **No se ha usado ya**, salvo que se usara hace menos de 30 segundos (16.5).
+6. **No ha caducado** (30 días).
+7. **Pertenece a ese JWT:** el `jti` del JWT coincide con el guardado. Un refresh token robado no sirve con un JWT de otra sesión.
+8. **El usuario existe y no está desactivado.**
+
+Si todo es correcto, marca el refresh token como usado y emite un par nuevo. Cada fallo devuelve el mismo 401 `auth.invalid_refresh_token`; el motivo concreto queda solo en el log (`Refresh rejected for {UserId}: {Reason}`), para no dar pistas a quien esté probando.
+
+### 16.5 Rotación y el margen de 30 segundos
+
+Cada refresh token sirve **una sola vez** (RN5). A esto se le llama **rotación**: si alguien roba un refresh token y lo usa, el legítimo deja de funcionar, o al revés, y la sesión robada dura como mucho hasta la siguiente renovación.
+
+Pero la rotación estricta tiene un problema práctico: la web puede lanzar dos peticiones casi a la vez justo cuando el JWT vence, y las dos intentarían renovar con el mismo refresh token. La segunda fallaría y la persona perdería la sesión sin haber hecho nada raro. Por eso existe `RefreshTokenReuseGrace`, de 30 segundos:
+
+```csharp
+if (storedToken.IsUsed && !(storedToken.UsedAt > now - jwt.RefreshTokenReuseGrace))
+    return RefreshFailure("refresh_token_spent", storedToken.UserId);
+```
+
+Un token ya usado sigue valiendo durante 30 segundos tras su primer uso, y después nunca más. Un token **revocado** no tiene margen: la prueba `A_revoked_refresh_token_is_rejected_even_inside_the_grace_window` lo comprueba.
+
+### 16.6 Cerrar sesión
+
+`LogoutAsync` marca el refresh token como revocado. No hace falta más: sin refresh token no se puede renovar, y el JWT caduca solo. Es idempotente: cerrar sesión con un token desconocido o ya revocado también responde 204, porque el resultado ("esa sesión ya no sirve") es el mismo.
+
+### 16.7 Lo que un JWT no puede hacer, y cómo se acota
+
+Un JWT ya emitido vale hasta que caduca. Eso tiene tres consecuencias que conviene conocer:
+
+- Tras cerrar sesión, el JWT que la web tenía sigue siendo válido hasta su hora de caducidad. La web lo borra de sus *cookies*, así que en la práctica no se usa.
+- Al **desactivar** una cuenta se revocan todos sus refresh tokens, pero su JWT actual sigue funcionando hasta que caduque, como mucho una hora.
+- Al **quitar el rol de administrador**, el JWT actual conserva el rol hasta que caduque. Por eso el panel avisa: "Pierde el acceso al panel cuando vuelva a iniciar sesión".
+
+La duración de 1 hora (`JwtConfig:ExpiryTime` en `appsettings.json`) es el compromiso: más corta obligaría a renovar más a menudo, y más larga alargaría esas ventanas. Una API que necesitara cortar el acceso al instante tendría que consultar la base en cada petición (por ejemplo, comprobando el `SecurityStamp` del usuario, que `AdminCustomerService` ya cambia en cada acción sobre la cuenta), y perdería la ventaja del JWT.
+
+### 16.8 Por qué así
+
+- **JWT y no sesiones en el servidor.** La API no guarda estado por petición, así que cualquier instancia puede atender cualquier petición sin compartir memoria. Es el estándar para una API consumida por otra aplicación.
+- **El navegador nunca ve los tokens.** La web es un servidor intermedio (BFF): guarda los dos tokens en *cookies* `HttpOnly`, que el JavaScript del navegador no puede leer, y es ella quien añade la cabecera `Authorization` al llamar a la API. Un script malicioso inyectado en la página no podría robarlos. Los detalles están en el capítulo 14 de la guía de la web.
+- **HMAC con una clave compartida y no claves públicas.** Una sola API emite y valida sus propios tokens, así que no hace falta que un tercero pueda verificarlos. Con varios servicios que validaran tokens de un emisor común convendría RSA o ECDSA, que firman con una clave privada y verifican con una pública.
+
+---
+
+## 17. Autorización, límites de peticiones y CORS
+
+### 17.1 Autenticación frente a autorización
+
+- **Autenticación:** quién eres. La resuelve el JWT (capítulo 16) y termina en `HttpContext.User`.
+- **Autorización:** qué puedes hacer. Se decide en tres niveles, de lo más general a lo más concreto:
+
+| Nivel | Dónde | Ejemplo |
+|---|---|---|
+| 1. ¿Hace falta sesión? | Atributos en el controlador | El carrito exige sesión; el catálogo no |
+| 2. ¿Hace falta un rol? | Atributos en el controlador | Todo `/api/admin/*` exige `Admin` |
+| 3. ¿Es suyo? ¿Lo permiten las reglas? | El servicio | Solo ves tus pedidos; no puedes quitarte el rol a ti mismo |
+
+### 17.2 Los atributos
+
+```csharp
+[Authorize]
+[Route("api/orders")]
+public sealed class OrdersController(OrderService orders) : ControllerBase
+```
+
+```csharp
+[ApiController]
+[Authorize(Roles = AdminRoles.Admin)]
+public abstract class AdminControllerBase : ControllerBase;
+```
+
+| Atributo | Efecto | Respuesta si falla |
+|---|---|---|
+| `[AllowAnonymous]` | Cualquiera, con o sin sesión | — |
+| `[Authorize]` | Hace falta un JWT válido | 401 Unauthorized |
+| `[Authorize(Roles = "Admin")]` | Además, el *claim* de rol `Admin` | 403 Forbidden |
+
+**La diferencia entre 401 y 403** importa: 401 significa "no sé quién eres" (la web manda al login); 403, "sé quién eres y no puedes" (la web muestra el error).
+
+**`AdminControllerBase` concentra la regla.** Los siete controladores del panel heredan de él, así que ninguno puede olvidar el `[Authorize(Roles = "Admin")]`. Y por si alguien creara un controlador de administración sin heredar de él, dos pruebas lo vigilan (`AdminAuthorizationTests`, 23.4):
+
+- `Every_admin_endpoint_rejects_anonymous_callers_and_customers` recorre **todos** los endpoints bajo `/api/admin` y comprueba que responden 401 sin token, 403 con un token de cliente y ni 401 ni 403 con uno de administrador.
+- `Admin_only_endpoints_live_under_the_admin_prefix` comprueba lo contrario: ningún endpoint que exija `Admin` vive fuera de `/api/admin/`.
+
+Quién puede llamar a qué:
+
+| Controlador | Ruta | Acceso |
+|---|---|---|
+| `ProductsController`, `ProductCategoriesController` | `/api/products`, `/api/product-categories` | Cualquiera (solo lectura) |
+| `AuthenticationController` | `/api/authentication/*` | Cualquiera, con límite de peticiones (17.5) |
+| `CartController`, `ClientsController`, `OrdersController` | `/api/cart`, `/api/clients/me`, `/api/orders` | Con sesión, sobre sus propios datos |
+| Los siete del panel | `/api/admin/*` | Rol `Admin` |
+
+### 17.3 Los datos propios
+
+Un cliente solo puede ver su carrito, su perfil y sus pedidos. El truco está en **de dónde sale el id**: nunca de la petición, siempre del token.
+
+```csharp
+public static string UserId(this ClaimsPrincipal principal) =>
+    principal.FindFirst("Id")?.Value ?? "anonymous";
+```
+
+```csharp
+[HttpGet("{id:int}")]
+public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+    (await orders.GetByIdAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
+```
+
+El servicio busca el cliente de ese usuario y filtra por él:
+
+```csharp
+.FirstOrDefaultAsync(o => o.Id == id && o.ClientId == clientId, cancellationToken);
+```
+
+Si el pedido 42 es de otra persona, la consulta no lo encuentra y la respuesta es **404**, no 403. Responder 403 confirmaría que el pedido 42 existe; con 404, quien prueba números no aprende nada. La prueba `Someone_else_cannot_see_or_cancel_the_order` lo comprueba.
+
+### 17.4 Reglas de autorización que son de negocio
+
+Algunas decisiones no caben en un atributo porque dependen de los datos. Están en los servicios y devuelven 409 con su motivo:
+
+- No puedes desactivarte, quitarte el rol ni borrarte a ti mismo (`customer.self_action`).
+- No se puede quitar el rol al último administrador (`customer.last_admin`). Como dos administradores podrían quitarse el rol el uno al otro a la vez, estas acciones se serializan con un bloqueo consultivo (14.7). La prueba `Simultaneous_revocations_always_leave_one_admin` lanza seis revocaciones simultáneas y comprueba que siempre queda uno.
+- Un administrador no se puede desactivar ni borrar sin quitarle antes el rol (`customer.is_admin`).
+- Una cuenta sin correo confirmado no puede ser administradora (`customer.unconfirmed`).
+
+### 17.5 Límites de peticiones (*rate limiting*)
+
+**Concepto.** Sin límites, alguien podría probar mil contraseñas por minuto contra una cuenta, o usar el registro para mandar miles de correos. Un **limitador** cuenta las peticiones de cada cliente en una ventana de tiempo y rechaza las que sobran con **429 Too Many Requests**.
+
+**En Furnistore** (`Extensions/RateLimitingExtensions.cs`) hay dos políticas, las dos de **ventana fija** por dirección IP:
+
+```csharp
+options.AddPolicy(AuthRateLimits.Credentials, context => PerClient(context, permitsPerMinute: 10));
+options.AddPolicy(AuthRateLimits.Session, context => PerClient(context, permitsPerMinute: 30));
+```
+
+| Política | Límite | Endpoints |
+|---|---|---|
+| `auth-credentials` | 10 por minuto | `register`, `login`, `resend-confirmation`, `verify-email` |
+| `auth-session` | 30 por minuto | `refresh-token`, `logout` |
+
+Se aplican con atributos: `[EnableRateLimiting(AuthRateLimits.Session)]` en todo `AuthenticationController`, y `[EnableRateLimiting(AuthRateLimits.Credentials)]` en los cuatro métodos que reciben credenciales o códigos, que sustituye a la del controlador. La sesión tiene un límite más alto porque la web renueva el token de forma automática y legítima.
+
+Cuando se supera el límite, `RejectAsync` responde con un `ProblemDetails` (`code: "rate_limited"`), añade la cabecera `Retry-After` con los segundos que faltan y lo anota en el log.
+
+**La IP correcta: *forwarded headers*.** Todas las peticiones a la API llegan desde el servidor de Next.js, no desde el navegador de cada persona. Si el limitador usara la IP de la conexión, todos los usuarios compartirían un solo contador. Por eso la web reenvía la IP real del visitante en la cabecera `X-Forwarded-For`, y `app.UseForwardedHeaders()` la usa como `RemoteIpAddress`:
+
+```csharp
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    var knownProxies = builder.Configuration["ForwardedHeaders:KnownProxies"] ?? string.Empty;
+    foreach (var proxy in knownProxies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        options.KnownProxies.Add(IPAddress.Parse(proxy));
+});
+```
+
+Solo se hace caso a esa cabecera si llega de un proxy de confianza. Por defecto ASP.NET Core confía en la propia máquina (*loopback*), que es donde corre la web en desarrollo. Si la web corriera en otro servidor, su IP iría en `ForwardedHeaders__KnownProxies`. Sin esa restricción, cualquiera podría inventarse un `X-Forwarded-For` distinto en cada petición y saltarse el límite.
+
+**Los límites se complementan.** El limitador frena a un atacante que prueba muchas cuentas desde una IP; el bloqueo de cuenta (15.4), a muchos atacantes que prueban una misma cuenta; y los 5 intentos por código (18.3), a quien intenta adivinar un código de verificación.
+
+### 17.6 CORS
+
+**Concepto.** Por seguridad, el navegador no deja que el JavaScript de una web (`https://tienda.com`) lea respuestas de otro origen (`https://api.tienda.com`), salvo que ese otro origen lo permita con cabeceras CORS (*Cross-Origin Resource Sharing*). Es una protección **del navegador**: no afecta a llamadas entre servidores.
+
+**En Furnistore:**
+
+```csharp
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("WebApp", policy =>
+        policy.WithOrigins(corsOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials());
+});
+```
+
+Los orígenes salen de `CORS_ORIGINS` (por defecto, `http://localhost:3000` y `3001`) y la política se aplica con `app.UseCors("WebApp")`.
+
+**Por qué apenas interviene.** El navegador nunca llama directamente a la API: llama a Next.js, y Next.js llama a la API desde el servidor, donde CORS no existe. Lo único que el navegador pide a la API son las imágenes de `/assets`, y una etiqueta `<img>` no está sujeta a CORS. La política queda como red de seguridad por si algún día la web llamara a la API desde el navegador: en ese caso solo lo podría hacer desde los orígenes de la lista.
+
+### 17.7 HTTPS
+
+`app.UseHttpsRedirection()` solo se activa fuera de Development: en producción, una petición por `http://` se redirige a `https://`, para que los tokens nunca viajen sin cifrar. En desarrollo todo ocurre en la propia máquina y la API escucha en `http://localhost:5135`.
+
+---
+
+## 18. Verificación de correo
+
+### 18.1 El flujo
+
+1. **Registro** (`POST /register`): crea la cuenta sin confirmar, el cliente y un código de 6 dígitos, y lo envía por correo. Responde `{ emailSent }`.
+2. **Verificación** (`POST /verify-email` con correo y código): si el código es correcto, marca `EmailConfirmed = true`.
+3. **Reenvío** (`POST /resend-confirmation`): genera un código nuevo, como mucho una vez por minuto.
+4. **Login**: rechaza las cuentas sin confirmar con 401 `auth.email_not_confirmed`, pero solo si la contraseña era correcta (18.4).
+
+El código sustituyó en octubre a un enlace de confirmación. Un enlace obliga a abrir el correo en el mismo dispositivo y a que la URL de la web esté bien configurada en la API; un código se puede leer en el móvil y escribir en el ordenador.
+
+### 18.2 El código
+
+`Auth/VerificationCodes.cs`:
+
+```csharp
+public static string Generate() =>
+    RandomNumberGenerator.GetInt32(0, (int)Math.Pow(10, Length)).ToString($"D{Length}");
+
+public static string Hash(string secret, string userId, string code) =>
+    Convert.ToHexStringLower(
+        HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes($"{userId}:{code}"))
+    );
+
+public static bool Matches(string expectedHash, string actualHash) =>
+    CryptographicOperations.FixedTimeEquals(
+        Encoding.ASCII.GetBytes(expectedHash),
+        Encoding.ASCII.GetBytes(actualHash)
+    );
+```
+
+- **Generación:** con el generador criptográfico, de 000000 a 999999. `D6` rellena con ceros a la izquierda.
+- **Se guarda el HMAC, no el código.** Un código de 6 dígitos solo tiene un millón de valores: un SHA-256 simple se podría invertir probándolos todos en un segundo. El HMAC mezcla el código con una clave secreta (la del JWT) y con el id del usuario, así que, sin la clave, la tabla `EmailVerificationCodes` no sirve de nada aunque se filtre.
+- **Comparación en tiempo constante.** Una comparación normal (`==`) se detiene en el primer carácter distinto, así que tarda un poco más cuanto más se parece. Midiendo esos tiempos con mucha precisión, alguien podría deducir el valor. `FixedTimeEquals` tarda siempre lo mismo.
+
+### 18.3 Los límites
+
+| Límite | Valor | Cómo se aplica |
+|---|---|---|
+| Vigencia | 15 minutos | Columna `ExpiresAt` |
+| Intentos fallidos | 5 por código | Columna `FailedAttempts`, incrementada de forma atómica |
+| Reenvío | 1 por minuto | Se mira si hay un código creado hace menos de 60 segundos |
+| Códigos vivos | 1 por usuario | Índice único en `UserId`; cada código nuevo borra el anterior |
+
+**Los intentos se reservan antes de comprobar el código**, con una sola sentencia:
+
+```csharp
+var attemptReserved = await db
+    .EmailVerificationCodes.Where(c => c.Id == stored.Id && c.FailedAttempts < VerificationCodes.MaxAttempts)
+    .ExecuteUpdateAsync(
+        setters => setters.SetProperty(c => c.FailedAttempts, c => c.FailedAttempts + 1),
+        cancellationToken
+    );
+```
+
+Si devuelve 0, el código ya agotó sus intentos y se borra. Hacerlo así, y no "leer el contador, comparar y sumar", evita que alguien lance 50 intentos en paralelo y todos lean "4 fallos" a la vez. La prueba `Parallel_guesses_never_get_more_than_five_attempts` lo comprueba. Tras el quinto fallo el código se quema, aunque el siguiente intento fuera el correcto (`Five_wrong_codes_burn_the_code_even_for_the_right_one`).
+
+### 18.4 No revelar qué cuentas existen
+
+Si la API respondiera distinto según exista o no una cuenta, cualquiera podría averiguar si `ana@example.com` está registrada. Por eso:
+
+- **Reenviar** siempre responde 202 Accepted: exista la cuenta o no, esté confirmada o no, o haya que esperar el minuto. El motivo real queda en el log.
+- **Verificar** con un correo inexistente responde lo mismo que con un código vencido: 400 `auth.code_expired`.
+- **El login** solo dice "confirma tu correo" a quien acierta la contraseña. Con una contraseña incorrecta, la respuesta es "correo o contraseña incorrectos", igual que si la cuenta no existiera.
+
+Cada regla tiene su prueba en `AuthFlowTests` (`Verifying_never_reveals_whether_an_account_exists`, `Login_only_reveals_an_unconfirmed_email_to_someone_who_knows_the_password`…).
+
+### 18.5 El envío
+
+`Application` declara qué necesita, sin saber cómo se envía:
+
+```csharp
+public sealed record EmailMessage(string To, string Subject, string HtmlBody, string TextBody);
+
+public interface IVerificationEmailSender
+{
+    Task SendAsync(EmailMessage message, CancellationToken cancellationToken);
+}
+```
+
+- **El mensaje** lo arma `AuthEmails.VerificationCode`, con dos versiones: HTML y texto plano, para los clientes de correo que no muestran HTML. El nombre del cliente se codifica con `HtmlEncoder` antes de insertarlo en el HTML: alguien que se registrara como `<script>…` no conseguiría inyectar nada en el correo.
+- **El envío** lo hace `SmtpEmailSender` (en `API`) con **MailKit**, por SMTP a Gmail (`smtp.gmail.com:587` con STARTTLS) y con un tiempo máximo de 10 segundos. Las credenciales salen de `SmtpSettings` (patrón Options, 5.3) y de las variables de entorno.
+- **Si el envío falla**, el código recién creado se borra y el registro responde `emailSent: false`. La web lo muestra y ofrece reenviar. Así un fallo de Gmail no deja un código guardado que nadie recibió y que bloquearía el reenvío durante un minuto (`A_failed_send_does_not_leave_a_code_that_blocks_the_next_attempt`).
+
+### 18.6 El modo consola para desarrollo
+
+Sin conexión no hay Gmail. Para poder registrarse en ese caso existe `LogVerificationEmailSender`, que en lugar de enviar el correo escribe el código en la consola de la API. Se activa con `Email:LogOnly = true` en la configuración, y `Program.cs` reemplaza el servicio registrado:
+
+```csharp
+if (builder.Configuration.GetValue<bool>("Email:LogOnly"))
+{
+    builder.Services.Replace(
+        ServiceDescriptor.Singleton<IVerificationEmailSender, LogVerificationEmailSender>()
+    );
+}
+```
+
+`Replace` sustituye el registro de `SmtpEmailSender` hecho antes en `AddApplicationServices`. `AuthService` no se entera: sigue pidiendo un `IVerificationEmailSender`. Es la inversión de dependencias de 6.4 en acción.
+
+### 18.7 Reintentar el registro
+
+Si la respuesta del registro se pierde (se cae la conexión justo después de crear la cuenta), la persona pulsará "Crear cuenta" otra vez y recibiría "ya existe una cuenta con ese correo" por una cuenta que nunca pudo confirmar. Por eso `RegisterAsync` tiene un caso especial: si la cuenta existe, **no está confirmada** y la contraseña coincide, no es un intento de suplantar a nadie, sino la misma persona reintentando, y se le reenvía el código (respetando el minuto de espera). Si la contraseña no coincide, se responde 409 `auth.email_exists`, como siempre.
+
+En ese mismo método se comprueba el carnet antes de crear la cuenta, y se deshace la cuenta si dos registros chocan con el mismo carnet (14.8).
+
+---
+
+# Parte V. Referencia del dominio
+
+Esta parte es de consulta: qué endpoints hay, qué hace cada servicio, qué errores puede devolver la API y con qué sistemas externos habla. Para entender el *porqué* de cada pieza, las partes anteriores son el mejor punto de partida.
+
+## 19. Controladores y endpoints
+
+### 19.1 Las convenciones de un controlador
+
+Todos los controladores siguen el mismo molde:
+
+```csharp
+[ApiController]
+[Authorize]
+[Route("api/orders")]
+public sealed class OrdersController(OrderService orders) : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    [ProducesResponseType<OrderResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken) =>
+        (await orders.GetByIdAsync(id, User.UserId(), cancellationToken)).ToActionResult(this);
+}
+```
+
+| Pieza | Para qué |
+|---|---|
+| `[ApiController]` | Activa comportamientos de API. El más importante: si el cuerpo no pasa la validación de los atributos (`[Required]`, `[StringLength]`…), responde 400 automáticamente, sin entrar en el método. |
+| `[Route]` y `[HttpGet("{id:int}")]` | La URL. `{id:int}` es una **restricción de ruta**: `/api/orders/abc` ni siquiera llega al método; responde 404. |
+| *Model binding* | Rellena los parámetros: `id` sale de la ruta, un objeto complejo sale del cuerpo JSON y, con `[FromQuery]`, de la *query string* (`?page=2&search=silla`). |
+| `CancellationToken` | Si el cliente corta la conexión, ASP.NET Core cancela el token y las consultas en curso se detienen (8.6). |
+| `[ProducesResponseType]` | Documenta qué devuelve cada código. No cambia el comportamiento, pero alimenta el contrato OpenAPI del que salen los tipos de la web (capítulo 24). |
+| `ToActionResult` / `ToNoContentResult` | Convierten el `Result` del servicio en la respuesta HTTP (8.1 y 21.2). |
+
+**Códigos de éxito que se usan:**
+
+| Código | Cuándo | Ejemplo |
+|---|---|---|
+| 200 OK | Devuelve datos | Casi todos |
+| 201 Created | Crea un recurso; incluye la cabecera `Location` con su URL (`CreatedAtAction`) | Checkout, crear producto |
+| 202 Accepted | "Recibido", sin prometer el resultado | Reenviar código de verificación (18.4) |
+| 204 No Content | Hecho, no hay nada que devolver | Guardar perfil, vaciar carrito, borrar, cerrar sesión |
+
+### 19.2 Todos los endpoints
+
+**Públicos**
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/products` | Catálogo paginado de productos activos, con búsqueda, categoría y rango de precio |
+| `GET /api/products/{id}` | Detalle de un producto, también si está archivado: así siguen funcionando los enlaces desde pedidos antiguos |
+| `GET /api/product-categories` | Categorías |
+| `GET /api/product-categories/{id}` | Una categoría |
+| `GET /health` | Estado de la API y de la base de datos (22.4) |
+| `GET /assets/{archivo}` | Imágenes de productos (22.2) |
+
+**Autenticación** (`/api/authentication`, públicos con límite de peticiones)
+
+| Método y ruta | Qué hace | Éxito |
+|---|---|---|
+| `POST /register` | Crea cuenta y cliente, envía el código | 200 `{ emailSent }` |
+| `POST /verify-email` | Confirma el correo con el código | 204 |
+| `POST /resend-confirmation` | Envía un código nuevo | 202 |
+| `POST /login` | Inicia sesión | 200 `{ token, refreshToken }` |
+| `POST /refresh-token` | Renueva los tokens | 200 `{ token, refreshToken }` |
+| `POST /logout` | Revoca el refresh token | 204 |
+
+**Del cliente** (con sesión, siempre sobre sus propios datos)
+
+| Método y ruta | Qué hace | Éxito |
+|---|---|---|
+| `GET /api/clients/me` | Perfil | 200 |
+| `PUT /api/clients/me` | Guardar perfil | 204 |
+| `GET /api/cart` | Carrito con totales calculados | 200 |
+| `POST /api/cart/items` | Agregar producto | 200 (carrito) |
+| `PUT /api/cart/items/{productId}` | Cambiar cantidad | 200 (carrito) |
+| `DELETE /api/cart/items/{productId}` | Quitar producto | 200 (carrito) |
+| `DELETE /api/cart` | Vaciar | 204 |
+| `GET /api/orders` | Mis pedidos, paginados | 200 |
+| `GET /api/orders/{id}` | Detalle de un pedido mío | 200 |
+| `POST /api/orders/checkout` | Confirmar la compra | 201 (pedido) |
+| `POST /api/orders/{id}/cancel` | Cancelar un pedido mío en *Pagado* | 200 (pedido) |
+
+Las operaciones del carrito devuelven el carrito completo y no solo la línea cambiada: la web lo pinta de nuevo sin otra petición, con los totales que calculó el servidor.
+
+**Panel** (`/api/admin`, rol `Admin`)
+
+| Área | Endpoints |
+|---|---|
+| Pedidos | `GET /orders` (búsqueda y filtros), `GET /orders/stats` (cuántos hay en cada estado), `GET /orders/{id}`, `POST /orders/{id}/prepare`, `/ship`, `/deliver`, `/cancel` |
+| Productos | `GET /products`, `GET /products/{id}`, `POST /products` (201), `PUT /products/{id}`, `DELETE /products/{id}` (204), `POST /products/images` |
+| Categorías | `GET /product-categories`, `POST`, `PUT /{id}`, `DELETE /{id}` (204) |
+| Clientes | `GET /customers`, `GET /customers/{id}`, `PUT /customers/{id}`, `DELETE /customers/{id}` (204), `POST /customers/{id}/unlock`, `/disable`, `/enable`, `POST` y `DELETE /customers/{id}/admin-role` |
+| Reportes | `GET /reports/sales`, `/products`, `/operations`, `/cancellations`, `/inventory`, `/customers`, `POST /reports/exports` (204) |
+| Auditoría | `GET /audit` |
+
+Las acciones sobre pedidos y clientes devuelven el recurso actualizado completo, con su historial, para que la pantalla se redibuje con una sola petición.
+
+### 19.3 Detalles que merecen una mención
+
+- **Subir una imagen** (`POST /api/admin/products/images`) recibe el archivo como `multipart/form-data` (`IFormFile file`). `[RequestSizeLimit]` corta la petición si pasa de 5 MB más un pequeño margen para las cabeceras, antes de leerla entera. El servicio comprueba después el tipo (JPG, PNG o WebP) y el tamaño exacto. Responde con la URL, que la web guarda luego en el producto.
+- **Cancelar un pedido** acepta el cuerpo vacío: `[FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CancelOrderRequest? request`. El motivo es opcional, y así la web no tiene que enviar `{}`.
+- **El panel y la tienda tienen respuestas distintas para lo mismo.** `ProductResponse` (público) no incluye ni la versión ni si tiene pedidos; `AdminProductResponse`, sí. Cada contrato expone solo lo que su pantalla necesita (8.3).
+
+---
+
+## 20. Servicios de aplicación
+
+Todos los servicios están en `API.Furnistore.Application`, se registran como Scoped (4.3) y devuelven `Result` (8.1).
+
+| Servicio | Carpeta | Responsabilidad | Detalles destacados |
+|---|---|---|---|
+| `AuthService` | `Auth/` | Registro, verificación, login, renovación, logout | Capítulos 15, 16 y 18 |
+| `ProductService` | `Products/` | Catálogo público | Solo productos activos; búsqueda con `ILIKE` escapado (8.7) |
+| `ProductCategoryService` | `ProductCategories/` | Categorías públicas | — |
+| `CartService` | `Carts/` | Carrito | Comprueba stock y productos archivados al agregar; calcula totales en el servidor |
+| `ClientService` | `Clients/` | Perfil propio | Versión `xmin`; carnet único (14.8) |
+| `OrderService` | `Orders/` | Checkout, mis pedidos, cancelación del cliente | Capítulo 7 y 14.4 |
+| `OrderWorkflow` | `Orders/` | Cambios de estado de un pedido | Lo usan `OrderService` y `AdminOrderService` (20.1) |
+| `AdminOrderService` | `Admin/Orders/` | Pedidos en el panel | Búsqueda por número o cliente; estadísticas por estado |
+| `AdminProductService` | `Admin/Products/` | Productos en el panel | Auditoría campo a campo; imágenes; borrar solo si no se vendió |
+| `AdminCategoryService` | `Admin/Categories/` | Categorías en el panel | Nombre único sin distinguir mayúsculas; no se borra con productos |
+| `AdminCustomerService` | `Admin/Customers/` | Clientes en el panel | Acciones de cuenta, roles y borrado (17.4) |
+| `AdminReportService` | `Admin/Reports/` | Los seis reportes y el registro de exportaciones | Guía de la web, 18.6 |
+| `AuditLog` | `Admin/Audit/` | **Escribir** en la auditoría | Solo añade la entrada; la guarda quien llame a `SaveChangesAsync` (20.2) |
+| `AuditService` | `Admin/Audit/` | **Leer** la auditoría | Listado con filtros e historial de una entidad |
+
+### 20.1 `OrderWorkflow`: una máquina de estados
+
+Cada cambio de estado de un pedido es un **dato**, no un método distinto:
+
+```csharp
+public static readonly OrderTransition Prepare = new(
+    "preparar",
+    [OrderStatus.Paid],
+    OrderStatus.Processing,
+    AuditActions.OrderProcessing,
+    ApiEvents.OrderProcessing
+);
+```
+
+| Transición | Desde | Hacia |
+|---|---|---|
+| `Prepare` | Pagado | En preparación |
+| `Ship` | En preparación | Enviado |
+| `Deliver` | Enviado | Entregado |
+| `CustomerCancel` | Pagado | Cancelado |
+| `AdminCancel` | Pagado, En preparación | Cancelado |
+
+Y un único método, `ApplyAsync`, los aplica todos con los mismos pasos:
+
+1. Abre una transacción y bloquea la fila del pedido (`SELECT … FOR UPDATE`, 14.5).
+2. Si se pasa un dueño (`ownerClientId`, cuando cancela el cliente), comprueba que el pedido sea suyo; si no, 404.
+3. Comprueba que el estado actual esté en `From`. Si no, responde 409 `order.invalid_transition` con un mensaje construido a partir del verbo: "No se puede enviar un pedido Entregado".
+4. Cambia el estado y guarda la fecha correspondiente (`ProcessingAt`, `ShippedAt`…).
+5. Si es una cancelación, guarda el motivo y devuelve el stock.
+6. Registra el cambio en la auditoría y en el log, y confirma.
+
+**Por qué así.** Añadir un estado nuevo (por ejemplo, *Devuelto*) sería añadir una transición a la lista, no copiar un método con sus bloqueos y su auditoría. Y la regla de qué cambio se puede hacer desde qué estado queda escrita en un solo sitio, legible como una tabla. Que cliente y administrador cancelen con transiciones distintas (`CustomerCancel` y `AdminCancel`) es justo la regla de negocio RN15.
+
+### 20.2 `AuditLog`: anotar sin guardar
+
+```csharp
+public void Record(
+    string actorUserId,
+    string action,
+    string entityType,
+    object entityId,
+    string summary,
+    AuditChanges? changes = null
+) =>
+    db.AuditEntries.Add(new AuditEntry { … });
+```
+
+`Record` solo **añade** la entrada al `DbContext`; no llama a `SaveChangesAsync`. Como el servicio que la usa comparte el mismo `DbContext` (es Scoped, 4.3), la entrada se guarda en el mismo `SaveChangesAsync` que el cambio que describe, dentro de la misma transacción. Así es imposible que quede un cambio sin su registro o un registro de un cambio que falló.
+
+`AuditChanges` describe qué cambió, campo a campo:
+
+```csharp
+var changes = new AuditChanges().Track("status", previous, transition.To);
+```
+
+`Track` solo anota el campo si el valor cambió; `Set` lo anota siempre (por ejemplo, el total de un pedido nuevo). Los valores se guardan como texto en un formato invariable (`120.5`, `2026-10-17`, `true`), sin depender del idioma del servidor, y el conjunto se serializa a JSON en la columna `Changes` (`jsonb`). La web traduce los nombres de campo y los valores para mostrarlos ("Precio: 120 → 135").
+
+---
+
+## 21. Catálogo de errores
+
+### 21.1 Los tres orígenes de un error
+
+| Origen | Cuándo | Forma de la respuesta |
+|---|---|---|
+| Validación de atributos | El cuerpo o la *query* no cumplen `[Required]`, `[StringLength]`, `[IdentityCard]`… | 400 `ValidationProblemDetails`, con `errors` por campo y sin `code` |
+| Regla de negocio | El servicio devuelve `Result.Fail(error)` | `ProblemDetails` con `title` (mensaje en español) y `code` estable |
+| Excepción inesperada | Un error de programación, la base caída… | 500 `ProblemDetails` con `traceId`, sin detalles internos |
+
+Más un cuarto, de infraestructura: el límite de peticiones responde 429 con `code: "rate_limited"` (17.5).
+
+### 21.2 De `ErrorType` a código HTTP
+
+Cada `Error` tiene un **código** estable, un **mensaje** para el usuario y un **tipo**. `ResultExtensions` traduce el tipo:
+
+```csharp
+private static int StatusFor(ErrorType type) =>
+    type switch
+    {
+        ErrorType.Validation => StatusCodes.Status400BadRequest,
+        ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
+        ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+        ErrorType.NotFound => StatusCodes.Status404NotFound,
+        ErrorType.Conflict => StatusCodes.Status409Conflict,
+        ErrorType.TooManyRequests => StatusCodes.Status429TooManyRequests,
+        _ => StatusCodes.Status500InternalServerError,
+    };
+```
+
+La diferencia entre 400 y 409 es útil para razonar: **400** significa "lo que enviaste está mal" (un rango de fechas al revés, un código que no son 6 dígitos); **409**, "lo que enviaste está bien, pero choca con el estado actual" (no hay stock, el pedido ya se envió, alguien guardó antes que tú).
+
+Una respuesta de error de negocio tiene esta forma:
+
+```json
+{
+  "title": "No hay stock suficiente de Silla Roble Nórdico.",
+  "status": 409,
+  "code": "checkout.insufficient_stock",
+  "traceId": "0HNPCAPND4L02:00000001"
+}
+```
+
+La web decide por `code`, nunca por el texto: el texto puede cambiar de redacción sin romper nada, y el código no.
+
+### 21.3 Todos los códigos
+
+**Autenticación**
+
+| Código | HTTP | Cuándo |
+|---|---|---|
+| `auth.email_exists` | 409 | Registro con un correo ya usado |
+| `auth.registration_failed` | 400 | Identity rechazó la cuenta (por ejemplo, contraseña inválida) |
+| `auth.invalid_credentials` | 401 | Correo o contraseña incorrectos, o la cuenta no existe |
+| `auth.email_not_confirmed` | 401 | Contraseña correcta, correo sin confirmar |
+| `auth.locked_out` | 429 | Cuenta bloqueada por intentos fallidos |
+| `auth.account_disabled` | 403 | Cuenta desactivada por un administrador |
+| `auth.code_invalid` | 400 | Código de verificación incorrecto |
+| `auth.code_expired` | 400 | Código vencido, inexistente o de una cuenta que no existe |
+| `auth.code_attempts_exceeded` | 429 | Quinto fallo con el mismo código |
+| `auth.confirmation_failed` | 500 | No se pudo guardar la confirmación |
+| `auth.invalid_refresh_token` | 401 | Cualquier fallo al renovar (16.4) |
+| `auth.refresh_token_expired` | 401 | El refresh token pasó sus 30 días |
+
+**Tienda**
+
+| Código | HTTP | Cuándo |
+|---|---|---|
+| `product.not_found` | 404 | Producto inexistente |
+| `category.not_found` | 404 | Categoría inexistente |
+| `cart.client_not_found` | 404 | La cuenta no tiene cliente asociado |
+| `cart.product_not_found` | 400 | Se agrega un producto que no existe |
+| `cart.product_unavailable` | 409 | Se agrega un producto archivado |
+| `cart.insufficient_stock` | 409 | Se pide más cantidad que el stock |
+| `cart.item_not_found` | 404 | Se cambia o quita una línea que no está en el carrito |
+| `client.self_not_found` | 404 | La cuenta no tiene cliente asociado |
+| `client.identity_card_taken` | 409 | El carnet ya pertenece a otra cuenta (también en el registro) |
+| `client.version_conflict` | 409 | El perfil cambió mientras se editaba |
+| `checkout.client_not_found` | 404 | La cuenta no tiene cliente asociado |
+| `checkout.empty_cart` | 400 | Confirmar con el carrito vacío |
+| `checkout.profile_incomplete` | 400 | Falta teléfono, carnet o dirección |
+| `checkout.product_unavailable` | 409 | Un producto del carrito se archivó; el mensaje lo nombra |
+| `checkout.insufficient_stock` | 409 | No queda stock suficiente; el mensaje nombra el producto |
+| `checkout.price_changed` | 409 | El total cambió desde que el cliente lo vio |
+| `order.not_found` | 404 | Pedido inexistente o de otra persona |
+| `order.invalid_transition` | 409 | Cambio de estado no permitido |
+
+**Panel**
+
+| Código | HTTP | Cuándo |
+|---|---|---|
+| `admin.version_conflict` | 409 | Otro administrador guardó antes (14.6) |
+| `query.invalid_sort` | 400 | Ordenación por un campo no permitido |
+| `product.category_not_found` | 400 | La categoría elegida no existe |
+| `product.referenced_by_order` | 409 | Borrar un producto que ya se vendió |
+| `product.image_type` | 400 | La imagen no es JPG, PNG ni WebP |
+| `product.image_size` | 400 | La imagen pasa de 5 MB |
+| `product.image_upload_failed` | 500 | No se pudo guardar la imagen |
+| `category.name_taken` | 409 | Ya hay una categoría con ese nombre |
+| `category.has_products` | 409 | Borrar una categoría con productos |
+| `customer.not_found` | 404 | Cliente inexistente |
+| `customer.self_action` | 409 | Desactivarse, quitarse el rol o borrarse a uno mismo |
+| `customer.last_admin` | 409 | Quitar el rol al último administrador |
+| `customer.is_admin` | 409 | Desactivar o borrar a un administrador |
+| `customer.has_orders` | 409 | Borrar un cliente con pedidos |
+| `customer.unconfirmed` | 409 | Dar el rol a una cuenta sin confirmar |
+| `customer.disabled` | 409 | Dar el rol o desbloquear una cuenta desactivada |
+| `customer.already_admin`, `customer.not_admin` | 409 | El rol ya está, o no está |
+| `customer.already_disabled`, `customer.not_disabled` | 409 | La cuenta ya está, o no está, desactivada |
+| `customer.not_locked` | 409 | Desbloquear una cuenta que no está bloqueada |
+| `report.invalid_range` | 400 | La fecha inicial es posterior a la final |
+| `report.range_too_long` | 400 | El rango supera los 3 años |
+
+### 21.4 Los errores inesperados
+
+`Middleware/GlobalExceptionHandler.cs` atrapa cualquier excepción que nadie manejó:
+
+```csharp
+logger.LogError(
+    ApiEvents.UnhandledException,
+    exception,
+    "Unhandled exception on {Method} {Path} [{TraceId}]",
+    context.Request.Method,
+    context.Request.Path,
+    context.TraceIdentifier
+);
+
+var problem = new ProblemDetails
+{
+    Status = StatusCodes.Status500InternalServerError,
+    Title = "Ocurrió un error inesperado.",
+    Instance = $"{context.Request.Method} {context.Request.Path}",
+};
+problem.Extensions["traceId"] = context.TraceIdentifier;
+```
+
+- **Al cliente:** un mensaje genérico y el `traceId`. Nunca la traza de la excepción, que revelaría nombres de tablas, rutas del servidor o versiones de bibliotecas.
+- **Al log:** todo, con el mismo `traceId`. Si alguien reporta un error, ese identificador lleva directamente a su línea del log.
+- **Una excepción no es un error.** Si el cliente cerró la conexión (`OperationCanceledException` con la petición abortada), no se registra nada: nadie va a leer la respuesta.
+
+---
+
+## 22. Integraciones externas
+
+### 22.1 Correo: Gmail por SMTP
+
+Ver 18.5. Requiere `SmtpSettings__UserName` y `SmtpSettings__Password` (una contraseña de aplicación de Gmail, no la de la cuenta). Si faltan, la API arranca con un aviso en el log y el registro responde `emailSent: false`. Sin conexión, `Email:LogOnly` escribe los códigos en la consola (18.6).
+
+### 22.2 Imágenes: la carpeta `assets/`
+
+Desde el 16 de octubre las imágenes de productos se guardan en la carpeta `assets/` de la raíz del repositorio, para que la aplicación funcione sin conexión:
+
+1. `LocalImageStorage.UploadAsync` escribe el archivo con un nombre aleatorio (`{Guid}.png`) y devuelve su URL: `http://localhost:5135/assets/673efe….png`. El nombre aleatorio evita choques y que alguien adivine o sobrescriba imágenes de otros productos.
+2. `Program.cs` sirve esa carpeta como archivos estáticos:
+
+   ```csharp
+   var assetsFolder = LocalImageStorage.Folder(app.Environment);
+   Directory.CreateDirectory(assetsFolder);
+   app.UseStaticFiles(new StaticFileOptions
+   {
+       FileProvider = new PhysicalFileProvider(assetsFolder),
+       RequestPath = LocalImageStorage.RequestPath,
+   });
+   ```
+
+   `UseStaticFiles` va antes de `UseRouting`: una petición a `/assets/…` se resuelve leyendo el disco, sin pasar por controladores, autenticación ni límites. Las imágenes del catálogo son públicas.
+3. La web muestra la imagen con `next/image`, que solo acepta las direcciones permitidas en `next.config.ts` (las del `API_BASE_URL`).
+
+`SupabaseImageStorage` y `SupabaseStorageSettings` siguen en el código, sin uso: volver a Supabase sería cambiar una línea del registro (6.4).
+
+### 22.3 PostgreSQL
+
+Capítulos 11 a 14. La API solo necesita `DATABASE_URL`. En desarrollo, la base corre en Docker (`docker compose up -d` en la raíz del repositorio, puerto 5433).
+
+### 22.4 El *health check*
+
+```csharp
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<APIFurnistoreContext>("database", tags: ["db"]);
+…
+app.MapHealthChecks("/health");
+```
+
+`GET /health` responde `Healthy` si la API está viva **y** puede consultar la base, y `Unhealthy` (503) si no. Lo usan los orquestadores y balanceadores para saber si deben mandar tráfico a esta instancia, y sirve a cualquiera para comprobar de un vistazo que todo está levantado.
+
+---
+
+# Parte VI. Calidad y operación
+
+## 23. Pruebas
+
+### 23.1 Concepto: qué probar y contra qué
+
+Una **prueba automática** es código que ejecuta otro código y comprueba que el resultado es el esperado. Se clasifican por cuánto del sistema involucran:
+
+| Tipo | Qué ejecuta | Ventaja | Inconveniente |
+|---|---|---|---|
+| Unitaria | Una clase aislada, con sus dependencias simuladas | Rapidísima | No prueba el SQL ni la base de datos |
+| **De integración** | Varias capas juntas, con una base de datos real | Prueba lo que de verdad se ejecuta | Más lenta |
+| De extremo a extremo | El sistema completo, desde un navegador | La más realista | Lenta y frágil |
+
+Furnistore apuesta por las **de integración contra un PostgreSQL real**. La mayor parte de su lógica delicada vive en la base: transacciones, bloqueos, `UPDATE … WHERE Stock >= cantidad`, índices únicos, restricciones `CHECK`. Una prueba unitaria con la base simulada daría por buena una consulta que en PostgreSQL falla, y no podría probar que dos checkouts simultáneos no venden la última unidad dos veces.
+
+### 23.2 Las herramientas
+
+El proyecto `API.Furnistore.IntegrationTests` usa:
+
+| Paquete | Para qué |
+|---|---|
+| **xUnit** | El marco de pruebas: `[Fact]` marca una prueba, `[Theory]` + `[InlineData]` una prueba con varios juegos de datos, y `Assert.*` las comprobaciones. |
+| **Testcontainers** | Arranca un contenedor Docker de PostgreSQL al empezar y lo destruye al terminar. Cada ejecución empieza con una base vacía. |
+| **Microsoft.AspNetCore.Mvc.Testing** | Levanta la API completa en memoria (`WebApplicationFactory`), para probar por HTTP. |
+| **coverlet** | Mide qué líneas cubren las pruebas. |
+
+### 23.3 La base de datos de las pruebas: `PostgresFixture`
+
+```csharp
+public sealed class PostgresFixture : IAsyncLifetime
+{
+    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    …
+    public async Task InitializeAsync()
+    {
+        await container.StartAsync();
+
+        services = BuildServices(container.GetConnectionString(), Images);
+
+        await using var db = CreateContext();
+        await db.Database.MigrateAsync();
+    }
+}
+```
+
+1. **`IAsyncLifetime`** permite código asíncrono al preparar (`InitializeAsync`) y al limpiar (`DisposeAsync`).
+2. **El contenedor** arranca un PostgreSQL de verdad, con su propio puerto aleatorio.
+3. **`MigrateAsync()`** aplica las 22 migraciones. De paso, eso prueba que el historial de migraciones funciona desde una base vacía.
+4. **`BuildServices`** monta un contenedor de dependencias igual al de la API, pero solo con lo necesario: el `DbContext`, Identity y los servicios. La diferencia: en lugar de guardar imágenes en disco, registra `FakeImageStorage`.
+
+Cada clase de prueba recibe el *fixture* con `IClassFixture<PostgresFixture>`: xUnit crea **un contenedor por clase** y lo comparte entre sus pruebas. Como varias pruebas usan la misma base, cada una crea sus propios datos con valores únicos (correos con un `Guid`, carnets con un contador), y así no se pisan.
+
+### 23.4 Cómo es una prueba
+
+`TestData` reúne los ayudantes para preparar datos (`CreateClientAsync`, `CreateProductAsync`, `PlaceOrderAsync`…), y `fixture.RunAsync` ejecuta un servicio en su propio *scope*, como lo haría una petición:
+
+```csharp
+[Fact]
+public async Task A_product_that_was_ordered_cannot_be_deleted_only_archived()
+{
+    var (userId, clientId) = await data.CreateClientAsync();
+    var product = await data.CreateProductAsync("Taburete vendido", 20m, stock: 5);
+    await data.PlaceOrderAsync(userId, clientId, product, 1, 20m);
+
+    var detail = await Products(service => service.GetByIdAsync(product, CancellationToken.None));
+    Assert.True(detail.Value.HasOrders);
+
+    var deleted = await fixture.RunAsync<AdminProductService, Result>(service =>
+        service.DeleteAsync(product, "admin-1", CancellationToken.None)
+    );
+    Assert.Equal("product.referenced_by_order", deleted.Error!.Code);
+}
+```
+
+Tres partes: **preparar** los datos, **actuar** llamando al servicio y **comprobar** el resultado. Los nombres de las pruebas son frases que describen la regla, y la lista de pruebas se lee como una especificación del negocio.
+
+**Dobles de prueba.** Lo que habla con el exterior se sustituye por una versión controlable:
+
+| Doble | Sustituye a | Permite |
+|---|---|---|
+| `FakeImageStorage` | `LocalImageStorage` | Ver qué se subió y simular un fallo (`Fail = true`) |
+| `Outbox` | `SmtpEmailSender` | Leer el código que se habría enviado (`LastCode`) y simular un fallo de Gmail |
+| `TestClock` | `TimeProvider.System` | Avanzar el reloj 16 minutos para probar que un código vence, sin esperar |
+
+`TestClock` es la razón de que los servicios pidan la hora a `TimeProvider` en lugar de llamar a `DateTime.UtcNow` (4.3).
+
+**Pruebas por HTTP.** `AdminAuthorizationTests` levanta la API entera con `WebApplicationFactory<Program>` (por eso `Program.cs` termina con `public partial class Program;`), fabrica JWT firmados con roles distintos y recorre todos los endpoints del panel (17.2).
+
+**Pruebas de concurrencia.** Lanzan varias operaciones a la vez con `Task.WhenAll` y comprueban que el resultado es coherente:
+
+| Prueba | Comprueba |
+|---|---|
+| `Concurrent_checkouts_of_the_same_cart_create_exactly_one_order` | El bloqueo por cliente (14.4) |
+| `Concurrent_clients_never_oversell_the_last_unit` | La reserva atómica de stock (14.4) |
+| `Two_admins_preparing_at_once_produce_a_single_transition` | `SELECT … FOR UPDATE` (14.5) |
+| `Simultaneous_revocations_always_leave_one_admin` | El bloqueo global de roles (14.7) |
+| `Parallel_guesses_never_get_more_than_five_attempts` | La reserva atómica de intentos (18.3) |
+
+### 23.5 Qué está cubierto
+
+72 casos en 66 métodos (un `[Theory]` del carnet prueba siete números distintos):
+
+| Archivo | Pruebas | Qué cubre |
+|---|---|---|
+| `AuthFlowTests` | 16 | Registro, código, login, bloqueo, renovación, logout |
+| `CheckoutTests` | 11 | Checkout feliz, todos sus rechazos y la concurrencia |
+| `AdminBackofficeTests` | 10 | Productos, categorías, pedidos y clientes en el panel |
+| `ReportTests` | 9 | Los seis reportes, rangos y exportaciones |
+| `OrderLifecycleTests` | 7 | Estados, cancelaciones y pedidos ajenos |
+| `CatalogAndCartTests` | 4 | Catálogo público y carrito |
+| `ProfileAndImageTests` | 3 (uno con 7 casos) | Carnet, perfil y subida de imágenes |
+| `AdminAuthorizationTests` | 2 | Que todo el panel exige `Admin` |
+| `AdminRoleTests` | 2 | Reglas de roles |
+| `AdminRoleConcurrencyTests` | 1 | Revocaciones simultáneas |
+| `ReshapeDomainModelMigrationTests` | 1 | Que la migración que transforma datos convierte las filas antiguas y se puede revertir |
+
+### 23.6 Ejecutarlas
+
+Hace falta Docker en marcha (Testcontainers lo usa para crear la base):
+
+```bash
+cd apps/api
+dotnet test API.Furnistore.IntegrationTests/API.Furnistore.IntegrationTests.csproj
+```
+
+Para ejecutar solo una clase o una prueba:
+
+```bash
+dotnet test API.Furnistore.IntegrationTests/API.Furnistore.IntegrationTests.csproj --filter "FullyQualifiedName~CheckoutTests"
+```
+
+La primera vez descarga la imagen `postgres:16-alpine`. Todo el conjunto tarda menos de un minuto.
+
+---
+
+## 24. Contrato OpenAPI
+
+### 24.1 Concepto
+
+**OpenAPI** (antes Swagger) es un formato estándar, en JSON, que describe una API: sus rutas, qué recibe cada una, qué devuelve y con qué códigos. A partir de esa descripción se pueden generar documentación navegable, clientes y tipos para otros lenguajes.
+
+### 24.2 En Furnistore: de los controladores al TypeScript
+
+El contrato hace de puente entre las dos aplicaciones, en tres pasos:
+
+```
+Controladores C# ──(Swashbuckle)──▶ apps/api/openapi.json ──(openapi-typescript)──▶ apps/web/src/lib/api/schema.d.ts
+```
+
+**1. Describir.** `Extensions/ApiContractExtensions.cs` configura **Swashbuckle**, que lee los controladores y sus atributos:
+
+```csharp
+services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "furnistore_API", Version = "v1" });
+    c.SupportNonNullableReferenceTypes();
+    c.UseAllOfToExtendReferenceSchemas();
+    …
+});
+```
+
+- `SupportNonNullableReferenceTypes` hace que un `string` de C# sea obligatorio en el contrato, y un `string?`, opcional. Así la nulabilidad de C# llega intacta a TypeScript.
+- `[ProducesResponseType]` en cada endpoint indica qué tipo devuelve cada código (19.1).
+- Los atributos de validación también pasan: `[StringLength(60, MinimumLength = 2)]` se convierte en `minLength` y `maxLength`.
+- Los `enum` se escriben como texto (`"Paid"`, no `0`), gracias a `JsonStringEnumConverter` (8.8).
+
+En Development, la API sirve además la documentación navegable en `/swagger`, donde se puede probar cada endpoint con un JWT pegado en "Authorize".
+
+**2. Generar el archivo.** Desde `apps/api`:
+
+```bash
+npm run openapi
+```
+
+Compila en Release y ejecuta `dotnet swagger tofile`, la herramienta de Swashbuckle declarada en `.config/dotnet-tools.json`. Esa herramienta busca en el ensamblado una clase llamada `SwaggerHostFactory` y, si existe, la usa para construir la aplicación en lugar de ejecutar `Program.cs`:
+
+```csharp
+public static IHost CreateHost()
+{
+    var builder = WebApplication.CreateBuilder();
+    builder.Services.AddApiContract().AddApplicationPart(typeof(SwaggerHostFactory).Assembly);
+    return builder.Build();
+}
+```
+
+Es un *host* mínimo, con solo los controladores y Swashbuckle. Generar el contrato no necesita base de datos, secretos ni conexión.
+
+**3. Generar los tipos.** Desde `apps/web`:
+
+```bash
+npm run gen:api
+```
+
+`openapi-typescript` convierte `openapi.json` en `schema.d.ts`, y la web usa esos tipos en sus llamadas (`ApiSchemas["RegisterRequest"]`).
+
+### 24.3 Por qué así
+
+- **Una sola fuente de verdad.** Los contratos se escriben una vez, en C#. Si se añade un campo obligatorio a `RegisterRequest`, tras regenerar, TypeScript marca en la web todos los sitios que no lo envían. Sin el contrato, el error aparecería en producción como un 400.
+- **El contrato está en el repositorio.** `openapi.json` y `schema.d.ts` se suben con el código, así que un cambio de contrato se ve en el *diff* del mismo commit que lo provoca.
+- **El coste:** hay que acordarse de regenerar después de cambiar un contrato. Si se olvida, la web compila con tipos viejos; el síntoma típico es un campo que la API exige y la web no envía.
+
+---
+
+## 25. Recetas para modificar el proyecto
+
+### 25.1 Comandos de uso diario
+
+Desde `apps/api`:
+
+| Tarea | Comando |
+|---|---|
+| Levantar la base | `docker compose up -d` (en la raíz del repositorio) |
+| Arrancar la API | `dotnet run --project API.Furnistore.API` |
+| Arrancar con recarga automática | `npm run dev` (`dotnet watch`) |
+| Compilar | `dotnet build API.sln` |
+| Pruebas | `dotnet test API.Furnistore.IntegrationTests/API.Furnistore.IntegrationTests.csproj` |
+| Crear una migración | `dotnet ef migrations add Nombre --project API.Furnistore.Data --startup-project API.Furnistore.API -- --environment Development` |
+| Aplicar migraciones | `dotnet ef database update --project API.Furnistore.Data --startup-project API.Furnistore.API -- --environment Development` |
+| Regenerar el contrato | `npm run openapi` y, en `apps/web`, `npm run gen:api` |
+| Hacer administrador a alguien | `dotnet run --project API.Furnistore.API -- admin promote correo@ejemplo.com` |
+
+### 25.2 Añadir un endpoint
+
+1. **El contrato** (`Application/<Área>/<Área>Contracts.cs`): un `record` para la petición, con sus atributos de validación, y otro para la respuesta. Nunca la entidad (8.3).
+2. **El servicio**: un método que devuelve `Result<T>`, con `Error.Validation`, `Error.Conflict`… para los fallos esperados, y con un código nuevo con el formato `área.motivo` si hace falta (capítulo 21).
+3. **El controlador**: un método fino que saca el usuario con `User.UserId()`, llama al servicio y devuelve `ToActionResult(this)`. Con `[ProducesResponseType]` para cada código posible.
+4. **Si es del panel**, el controlador hereda de `AdminControllerBase` y la ruta empieza por `api/admin/`. Las pruebas de autorización lo comprobarán solas.
+5. **Si cambia algo**, el servicio registra la acción con `audit.Record(…)` antes de `SaveChangesAsync`, con su constante en `AuditActions`.
+6. **Una prueba** en la clase correspondiente: el caso feliz y cada rechazo.
+7. **Regenerar el contrato** (24.2).
+
+### 25.3 Añadir un campo a una tabla
+
+1. La propiedad en la entidad (`Shared/<Entidad>.cs`). Si puede faltar en las filas existentes, debe ser anulable (`string?`) o tener un valor por defecto.
+2. Sus reglas en la configuración (`Data/Configurations/<Entidad>Configuration.cs`): longitud, índice, `CHECK`.
+3. `dotnet ef migrations add AddNombreDelCampo` y **leer** la migración generada antes de aplicarla.
+4. `dotnet ef database update`.
+5. Añadirlo a los contratos y servicios que lo usen, y regenerar el contrato.
+
+### 25.4 Añadir una regla de negocio
+
+1. Si es de formato (longitud, patrón), un atributo en el contrato: no llega ni al servicio.
+2. Si depende de los datos, una comprobación en el servicio que devuelva `Result.Fail(Error.…("área.motivo", "Mensaje para el usuario."))`.
+3. Si es crítica, además una restricción en la base (`CHECK`, índice único), para que se cumpla aunque el código tenga un error (8.4).
+4. Una prueba con el nombre de la regla.
+5. En la web, si hace falta, un mensaje propio para ese código.
+
+### 25.5 Añadir un reporte
+
+Los pasos de la API y de la web están juntos en la receta 22.5 de la guía de la web.
+
+---
+
+## 26. Deuda conocida y glosario
+
+### 26.1 Deuda conocida
+
+Detalles encontrados al escribir esta guía. Ninguno rompe nada; son mejoras pendientes:
+
+- **El JWT no se puede cortar antes de que caduque** (16.7). Desactivar una cuenta o quitarle el rol tarda hasta una hora en tener efecto completo.
+- **`OrderService.CheckoutAsync` usa `DateTime.UtcNow`** en lugar del `TimeProvider` inyectado (4.3), así que la fecha de un pedido no se puede controlar en las pruebas. La fecha estimada de entrega también se calcula sobre la fecha UTC y no sobre la de La Habana.
+- **Código de Supabase sin uso**: `SupabaseImageStorage`, `SupabaseStorageSettings` y el aviso de arranque de Storage sin configurar (3.3) quedaron de cuando las imágenes se subían allí.
+- **El dígito de control del carnet no se valida** porque no se conoce la fórmula oficial (`IdentityCardAttribute`).
+- **Comentarios heredados** en `Program.cs` y `AuthService`, de las primeras versiones, con faltas de ortografía. No afectan al comportamiento.
+- **La clave del JWT firma también los códigos de verificación** (18.2). Funciona, pero si se cambiara `JWT_SECRET`, los códigos pendientes dejarían de valer. Una clave propia para los códigos sería más limpia.
+
+### 26.2 Glosario
+
+| Término | Significado |
+|---|---|
+| **ASP.NET Core** | El marco web de .NET: servidor, *middleware*, controladores, autenticación. |
+| **Claim** | Un dato dentro de un JWT: el id del usuario, su correo, su rol. |
+| **Contenedor (de dependencias)** | El objeto de .NET que construye los servicios y sus dependencias (capítulo 4). |
+| **Contenedor (Docker)** | Un proceso aislado con su propio sistema de archivos; aquí, el PostgreSQL. |
+| **Controlador** | Clase que recibe peticiones HTTP y las delega en un servicio. |
+| **DbContext** | La puerta de EF Core a la base de datos: consultas, cambios y transacciones. |
+| **DTO / contrato** | Clase que define la forma de una petición o respuesta, distinta de la entidad. |
+| **EF Core** | Entity Framework Core, el ORM de .NET (capítulo 11). |
+| **Endpoint** | Una ruta con su método HTTP: `POST /api/orders/checkout`. |
+| **Entidad** | Clase que representa una tabla: `Product`, `Order`. |
+| **Fixture** | En las pruebas, la preparación compartida (aquí, la base de datos). |
+| **Hash** | Resultado de una función de un solo sentido; se guarda en lugar de contraseñas y tokens. |
+| **HMAC** | Hash que además usa una clave secreta: sin la clave no se puede calcular ni falsificar. |
+| **Identity** | La biblioteca de cuentas, contraseñas y roles de ASP.NET Core (capítulo 15). |
+| **Idempotente** | Que repetirla da el mismo resultado: cerrar sesión dos veces, cancelar dos veces. |
+| **JWT** | *JSON Web Token*: token firmado que demuestra quién hace la petición (capítulo 16). |
+| **Kestrel** | El servidor HTTP que viene con ASP.NET Core. |
+| **LINQ** | Las consultas integradas en C# (`Where`, `Select`…), que EF Core traduce a SQL. |
+| **Middleware** | Pieza del *pipeline* que procesa cada petición antes y después de los controladores. |
+| **Migración** | Cambio versionado del esquema de la base (capítulo 13). |
+| **NuGet** | El gestor de paquetes de .NET. |
+| **OpenAPI** | Formato estándar para describir una API (capítulo 24). |
+| **ORM** | *Object-Relational Mapper*: traduce entre objetos y tablas. |
+| **ProblemDetails** | Formato estándar (RFC 9457) de las respuestas de error. |
+| **Rate limiting** | Límite de peticiones por cliente y tiempo (17.5). |
+| **Refresh token** | Token de larga duración que solo sirve para pedir un JWT nuevo. |
+| **Result** | El tipo que devuelven los servicios: éxito con un valor, o un `Error` (8.1). |
+| **Rol** | Permiso con nombre (`Admin`, `User`) que se asigna a una cuenta. |
+| **Scoped / Singleton / Transient** | Cuánto vive un servicio en el contenedor (4.2). |
+| **Swashbuckle** | La biblioteca que genera el contrato OpenAPI a partir de los controladores. |
+| **Testcontainers** | Biblioteca que arranca contenedores Docker desde las pruebas. |
+| **Transacción** | Grupo de cambios que se guardan todos o ninguno (capítulo 14). |
+| **xmin** | Columna de sistema de PostgreSQL que cambia con cada actualización; sirve de versión (14.6). |
+| **xUnit** | El marco de pruebas de .NET que usa el proyecto. |
+
+---
+
+*Fin de la guía.*
+

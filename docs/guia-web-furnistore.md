@@ -1266,6 +1266,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
 Para cada pantalla: ruta, cómo se renderiza, qué datos carga, qué puede hacer el usuario y qué componentes intervienen. "Servidor" quiere decir que la página se genera en el servidor en cada petición; las partes interactivas se indican aparte.
 
+El árbol completo de componentes propios, de cada ruta a sus hojas, está en este diagrama (ábrelo en SVG para hacer zoom sin perder nitidez):
+
+![Árbol de componentes de la web](guia-web-diagramas/arbol-componentes.png)
+
+- **Cómo leerlo:** cada caja es un componente propio, con una línea que explica para qué sirve, y la flecha va del componente que pinta al pintado. Las pestañas blancas son las rutas. Borde continuo: se pinta en el servidor; borde discontinuo: corre en el navegador (capítulo 5).
+- **Lo que no aparece:** las primitivas de shadcn/ui y los componentes de Next.js o de otras librerías. Las piezas genéricas que se repiten en casi todas las pantallas (`Panel`, `Pagination`, `AdminPageHeader`, `DataTable`, los filtros…) se listan en un recuadro aparte para no llenar el árbol de flechas.
+- **Para regenerarlo** después de añadir componentes, edita el árbol en `docs/guia-web-diagramas/generar-arbol-componentes.py` y ejecútalo desde la raíz del repositorio: `python3 docs/guia-web-diagramas/generar-arbol-componentes.py`. Necesita Graphviz (`dot`), y marca solo qué componentes corren en el navegador, leyendo si su archivo empieza por `"use client"`.
+
 ## 17. La tienda
 
 ### 17.1 Catálogo — `/`
